@@ -663,3 +663,292 @@ input[type="range"]::-moz-range-thumb {
   background: var(--thumb-bg);
   border: 1px solid rgba(0,0,0,0.4);
 }
+
+/* ============================================
+   FULLSCREEN viz
+   ============================================ */
+.viz-top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-end;
+  pointer-events: auto;
+}
+.viz-fs-btn {
+  background: rgba(0,0,0,0.5);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 4px 10px;
+  font-size: 16px;
+  font-family: var(--font-display);
+  cursor: pointer;
+  line-height: 1;
+  min-width: 36px;
+}
+.viz-fs-btn:active { transform: scale(0.9); }
+
+.viz-panel.fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  margin: 0 !important;
+  z-index: 200;
+  border: none;
+}
+.viz-panel.fullscreen .viz-info {
+  font-size: 22px;
+}
+.viz-panel.fullscreen .track-meta { font-size: 16px; }
+
+/* ============================================
+   8-BAND EQ PANEL
+   ============================================ */
+.eq-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.eq-panel.hidden { display: none; }
+.eq-inner {
+  background: var(--panel-bg);
+  border: var(--bevel);
+  padding: 14px;
+  width: 100%;
+  max-width: 380px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--fg);
+}
+.eq-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--accent);
+  letter-spacing: 3px;
+  color: var(--accent);
+  font-size: 12px;
+}
+.eq-presets {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.eq-presets select {
+  flex: 1;
+  background: var(--track-bg);
+  color: var(--fg);
+  border: var(--bevel-in);
+  padding: 5px;
+  font-family: var(--font-lcd);
+  font-size: 14px;
+  cursor: pointer;
+}
+.eq-enable {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.eq-enable input { cursor: pointer; }
+
+.eq-bands {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 10px 4px;
+  background: var(--track-bg);
+  border: var(--bevel-in);
+}
+.eq-band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.eq-band-slider {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 20px;
+  height: 100px;
+  background: transparent;
+  cursor: pointer;
+}
+.eq-band-slider::-webkit-slider-runnable-track {
+  width: 3px;
+  background: var(--bg);
+  border: var(--bevel-in);
+}
+.eq-band-slider::-moz-range-track {
+  width: 3px;
+  background: var(--bg);
+  border: var(--bevel-in);
+}
+.eq-band-slider::-webkit-slider-thumb {
+  width: 16px;
+  height: 10px;
+  background: var(--accent);
+  border: 1px solid var(--btn-fg);
+  cursor: grab;
+}
+.eq-band-slider::-moz-range-thumb {
+  width: 16px;
+  height: 10px;
+  background: var(--accent);
+  border: 1px solid var(--btn-fg);
+  cursor: grab;
+}
+.eq-band-val {
+  font-size: 8px;
+  color: var(--accent);
+  min-height: 10px;
+  font-family: var(--font-lcd);
+  font-size: 11px;
+}
+.eq-band-hz {
+  font-size: 8px;
+  letter-spacing: 0;
+  color: var(--fg);
+  opacity: 0.7;
+  text-align: center;
+}
+.eq-preamp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 6px;
+  background: var(--track-bg);
+  border: var(--bevel-in);
+}
+.eq-label {
+  font-size: 9px;
+  color: var(--accent);
+  min-width: 22px;
+  letter-spacing: 1px;
+}
+.eq-val {
+  font-family: var(--font-lcd);
+  font-size: 13px;
+  color: var(--accent);
+  min-width: 38px;
+  text-align: right;
+}
+.eq-preamp-row input[type="range"] { flex: 1; }
+.eq-reset {
+  width: 100%;
+  padding: 8px;
+}
+
+/* ============================================
+   NEW THEMES
+   ============================================ */
+
+/* AMBER — monochrome amber CRT terminal */
+.theme-amber {
+  --bg: #100800;
+  --fg: #ffaa33;
+  --panel-bg: #1a0e00;
+  --titlebar-bg: linear-gradient(180deg, #2a1a04, #100800);
+  --titlebar-fg: #ffaa33;
+  --viz-bg: #0a0500;
+  --list-bg: #0a0500;
+  --lcd-fg: #ffaa33;
+  --lcd-glow: #ffaa33aa;
+  --accent: #ffcc66;
+  --accent-glow: #ffcc66;
+  --btn-bg: linear-gradient(180deg, #3a2408, #1a0e00);
+  --btn-fg: #ffaa33;
+  --track-bg: #0a0500;
+  --thumb-bg: #ffaa33;
+  --bevel: 1px solid #6a4408;
+  --bevel-in: 1px solid #2a1a04;
+  --bevel-b: 1px solid #6a4408;
+  --font-display: 'VT323', monospace;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* MILKDROP — iridescent black/cyan/magenta */
+.theme-milkdrop {
+  --bg: #05001a;
+  --fg: #00ffcc;
+  --panel-bg: #0a0030;
+  --titlebar-bg: linear-gradient(90deg, #ff00aa, #00ffcc);
+  --titlebar-fg: #000;
+  --viz-bg: #000;
+  --list-bg: #05001a;
+  --lcd-fg: #00ffcc;
+  --lcd-glow: #00ffccaa;
+  --accent: #ff00aa;
+  --accent-glow: #ff00aa;
+  --btn-bg: linear-gradient(180deg, #2a0050, #0a0030);
+  --btn-fg: #00ffcc;
+  --track-bg: #05001a;
+  --thumb-bg: #ff00aa;
+  --bevel: 1px solid #00ffcc;
+  --bevel-in: 1px solid #ff00aa;
+  --bevel-b: 1px solid #ff00aa66;
+  --font-display: 'Orbitron', sans-serif;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* GAME BOY — 4-tone green LCD */
+.theme-gameboy {
+  --bg: #8bac0f;
+  --fg: #0f380f;
+  --panel-bg: #9bbc0f;
+  --titlebar-bg: #306230;
+  --titlebar-fg: #9bbc0f;
+  --viz-bg: #8bac0f;
+  --list-bg: #9bbc0f;
+  --lcd-fg: #0f380f;
+  --lcd-glow: transparent;
+  --accent: #0f380f;
+  --accent-glow: #0f380f;
+  --btn-bg: #306230;
+  --btn-fg: #9bbc0f;
+  --track-bg: #306230;
+  --thumb-bg: #0f380f;
+  --bevel: 2px solid #0f380f;
+  --bevel-in: 2px solid #306230;
+  --bevel-b: 1px solid #0f380f;
+  --font-display: 'Press Start 2P', monospace;
+  --font-lcd: 'Press Start 2P', monospace;
+}
+
+/* Y2K CHROME — brushed metallic silver/blue */
+.theme-y2k {
+  --bg: linear-gradient(180deg, #d8dfe8 0%, #b4c4d8 50%, #90a8c4 100%);
+  --fg: #1a2844;
+  --panel-bg: linear-gradient(180deg, #e8ecf4, #a8b8d0);
+  --titlebar-bg: linear-gradient(180deg, #e0e8f4, #7d95b8 50%, #5a7099);
+  --titlebar-fg: #fff;
+  --viz-bg: linear-gradient(180deg, #1a2844, #5a7099);
+  --list-bg: linear-gradient(180deg, #f4f6fa, #c4d0e0);
+  --lcd-fg: #1a2844;
+  --lcd-glow: #ffffff66;
+  --accent: #ff6600;
+  --accent-glow: #ff660088;
+  --btn-bg: linear-gradient(180deg, #ffffff, #d4dce8 40%, #7d95b8);
+  --btn-fg: #1a2844;
+  --track-bg: linear-gradient(180deg, #7d95b8, #c4d0e0);
+  --thumb-bg: linear-gradient(180deg, #fff, #7d95b8);
+  --bevel: 1px solid #5a7099;
+  --bevel-in: 1px solid #5a7099;
+  --bevel-b: 1px solid #5a7099;
+  --font-display: 'Orbitron', sans-serif;
+  --font-lcd: 'VT323', monospace;
+}
