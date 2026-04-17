@@ -29,7 +29,7 @@
   </header>
 
   <!-- Visualizer canvas -->
-  <section class="viz-panel">
+  <section class="viz-panel" id="viz-panel">
     <canvas id="viz-canvas"></canvas>
     <div class="viz-overlay">
       <div class="viz-info">
@@ -46,7 +46,10 @@
           <span id="track-freq">44 kHz</span>
         </div>
       </div>
-      <div class="viz-mode-label" id="viz-mode-label">SPECTRUM</div>
+      <div class="viz-top-right">
+        <button class="viz-fs-btn" id="viz-fs-btn" aria-label="Fullscreen">⛶</button>
+        <div class="viz-mode-label" id="viz-mode-label">SPECTRUM</div>
+      </div>
     </div>
   </section>
 
@@ -59,6 +62,7 @@
     <button class="t-btn" id="next-btn" aria-label="Next">⏭</button>
     <button class="t-btn sm" id="shuffle-btn" aria-label="Shuffle">⇄</button>
     <button class="t-btn sm" id="repeat-btn" aria-label="Repeat">↻</button>
+    <button class="t-btn sm" id="eq-btn" aria-label="EQ">EQ</button>
   </section>
 
   <!-- Seek + volume -->
@@ -117,6 +121,10 @@
       <button class="swatch" data-theme="vaporwave" title="Vaporwave" style="--s1:#ff71ce;--s2:#01cdfe"></button>
       <button class="swatch" data-theme="metal" title="Brushed Metal" style="--s1:#c0c0c0;--s2:#606060"></button>
       <button class="swatch" data-theme="luna" title="XP Luna" style="--s1:#245edb;--s2:#3c9b3c"></button>
+      <button class="swatch" data-theme="amber" title="Amber CRT" style="--s1:#1a0e00;--s2:#ffaa33"></button>
+      <button class="swatch" data-theme="milkdrop" title="MilkDrop" style="--s1:#120040;--s2:#00ffcc"></button>
+      <button class="swatch" data-theme="gameboy" title="Game Boy" style="--s1:#0f380f;--s2:#9bbc0f"></button>
+      <button class="swatch" data-theme="y2k" title="Y2K Chrome" style="--s1:#d8dfe8;--s2:#7d95b8"></button>
     </div>
   </footer>
 </div>
@@ -124,6 +132,41 @@
 <!-- Hidden audio element -->
 <audio id="audio" crossorigin="anonymous"></audio>
 <input type="file" id="file-input" multiple style="display:none" />
+
+<!-- 8-band EQ overlay -->
+<div id="eq-panel" class="eq-panel hidden">
+  <div class="eq-inner">
+    <div class="eq-header">
+      <span>8-BAND EQ</span>
+      <button class="px-btn" id="eq-close">✕</button>
+    </div>
+    <div class="eq-presets">
+      <select id="eq-preset">
+        <option value="flat">Flat</option>
+        <option value="rock">Rock</option>
+        <option value="pop">Pop</option>
+        <option value="dance">Dance</option>
+        <option value="jazz">Jazz</option>
+        <option value="classical">Classical</option>
+        <option value="bass">Bass Boost</option>
+        <option value="vocal">Vocal</option>
+        <option value="trance">Trance</option>
+      </select>
+      <label class="eq-enable">
+        <input type="checkbox" id="eq-enable" checked /> ON
+      </label>
+    </div>
+    <div class="eq-bands" id="eq-bands">
+      <!-- populated by JS -->
+    </div>
+    <div class="eq-preamp-row">
+      <span class="eq-label">PRE</span>
+      <input type="range" id="eq-preamp" min="-12" max="12" step="0.5" value="0" />
+      <span class="eq-val" id="eq-preamp-val">0dB</span>
+    </div>
+    <button class="px-btn eq-reset" id="eq-reset">RESET</button>
+  </div>
+</div>
 
 <!-- Hidden menu drawer -->
 <div id="drawer" class="drawer hidden">
