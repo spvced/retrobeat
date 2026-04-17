@@ -114,7 +114,9 @@ function setViz(name) {
   });
   $('viz-mode-label').textContent = {
     bars: 'SPECTRUM', oscope: 'OSCILLOSCOPE', milkdrop: 'PLASMA',
-    starfield: 'STARFIELD', matrix: 'MATRIX', tunnel: 'TUNNEL', fire: 'FIRE'
+    starfield: 'STARFIELD', matrix: 'MATRIX', tunnel: 'TUNNEL', fire: 'FIRE',
+    waves: 'WAVEFORM', rings: 'RINGS', dna: 'DNA HELIX',
+    vortex: 'VORTEX', lasers: 'LASERS', pixels: 'PIXELS'
   }[name] || name.toUpperCase();
   saveSettings();
 }
@@ -184,6 +186,12 @@ function draw() {
     case 'matrix':    drawMatrix(W, H, lcd, bg); break;
     case 'tunnel':    drawTunnel(W, H, accent, bg); break;
     case 'fire':      drawFire(W, H); break;
+    case 'waves':     drawWaves(W, H, accent, bg); break;
+    case 'rings':     drawRings(W, H, accent, bg); break;
+    case 'dna':       drawDNA(W, H, accent, bg); break;
+    case 'vortex':    drawVortex(W, H, accent, bg); break;
+    case 'lasers':    drawLasers(W, H, accent, bg); break;
+    case 'pixels':    drawPixels(W, H, accent, bg); break;
   }
 }
 requestAnimationFrame(draw);
@@ -417,6 +425,250 @@ function drawFire(W, H) {
   vctx.imageSmoothingEnabled = false;
   vctx.drawImage(tmp, 0, 0, W, H);
   vctx.imageSmoothingEnabled = true;
+}
+
+// ---- WAVES — scrolling persistent waveform (AVS-style) ----
+let waveHistory = [];
+function drawWaves(W, H, color, bg) {
+  // persistence fade
+  vctx.fillStyle = hex2rgba(bg, 0.15);
+  vctx.fillRect(0, 0, W, H);
+  // grid
+  vctx.strokeStyle = hex2rgba(color, 0.1);
+  vctx.lineWidth = 1;
+  for (let y = 0; y < H; y += H / 8) {
+    vctx.beginPath(); vctx.moveTo(0, y); vctx.lineTo(W, y); vctx.stroke();
+  }
+  // capture current wave snapshot
+  const snap = new Float32Array(64);
+  const step = Math.floor(timeData.length / 64);
+  for (let i = 0; i < 64; i++) snap[i] = (timeData[i * step] / 128 - 1);
+  waveHistory.unshift(snap);
+  if (waveHistory.length > 30) waveHistory.length = 30;
+  // draw fading trail of past waves
+  for (let h = waveHistory.length - 1; h >= 0; h--) {
+    const alpha = 1 - h / waveHistory.length;
+    vctx.strokeStyle = hex2rgba(color, alpha * 0.8);
+    vctx.lineWidth = h === 0 ? 2.5 : 1;
+    vctx.shadowColor = h === 0 ? color : 'transparent';
+    vctx.shadowBlur = h === 0 ? 6 : 0;
+    vctx.beginPath();
+    const wave = waveHistory[h];
+    for (let i = 0; i < wave.length; i++) {
+      const x = (i / (wave.length - 1)) * W;
+      const y = H / 2 + wave[i] * (H / 2) * 0.8 - h * 2;
+      if (i === 0) vctx.moveTo(x, y); else vctx.lineTo(x, y);
+    }
+    vctx.stroke();
+  }
+  vctx.shadowBlur = 0;
+}
+
+// ---- RINGS — concentric bass-reactive circles ----
+let ringPulses = [];
+function drawRings(W, H, color, bg) {
+  vctx.fillStyle = hex2rgba(bg, 0.2);
+  vctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const bass = avgBand(0, 8) / 255;
+  const mid = avgBand(16, 48) / 255;
+  // trigger new pulse on bass hits
+  if (bass > 0.55 && (ringPulses.length === 0 || ringPulses[0].r > 40)) {
+    ringPulses.unshift({ r: 0, intensity: bass });
+  }
+  // advance pulses
+  for (const p of ringPulses) p.r += 4 + bass * 6;
+  ringPulses = ringPulses.filter(p => p.r < Math.max(W, H));
+
+  for (const p of ringPulses) {
+    const alpha = Math.max(0, 1 - p.r / Math.max(W, H));
+    vctx.strokeStyle = hex2rgba(color, alpha * p.intensity);
+    vctx.lineWidth = 2 + p.intensity * 4;
+    vctx.beginPath();
+    vctx.arc(cx, cy, p.r, 0, Math.PI * 2);
+    vctx.stroke();
+  }
+  // center dot reactive to mids
+  vctx.fillStyle = color;
+  vctx.shadowColor = color;
+  vctx.shadowBlur = 15;
+  vctx.beginPath();
+  vctx.arc(cx, cy, 4 + mid * 20, 0, Math.PI * 2);
+  vctx.fill();
+  vctx.shadowBlur = 0;
+}
+
+// ---- DNA HELIX — Y2K rotating double-helix ----
+let dnaAngle = 0;
+function drawDNA(W, H, color, bg) {
+  vctx.fillStyle = bg;
+  vctx.fillRect(0, 0, W, H);
+  const bass = avgBand(0, 16) / 255;
+  const treble = avgBand(60, 120) / 255;
+  dnaAngle += 0.03 + bass * 0.08;
+
+  const cx = W / 2;
+  const segments = 40;
+  const amp = W * 0.22 + bass * 20;
+  const nodes = [];
+  // compute both strands
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const y = t * H;
+    const phase = t * Math.PI * 3 + dnaAngle;
+    const x1 = cx + Math.sin(phase) * amp;
+    const x2 = cx + Math.sin(phase + Math.PI) * amp;
+    const z1 = Math.cos(phase);   // depth cue
+    const z2 = Math.cos(phase + Math.PI);
+    nodes.push({ x1, x2, y, z1, z2 });
+  }
+  // rungs
+  for (let i = 0; i < nodes.length; i += 2) {
+    const n = nodes[i];
+    const avgZ = (n.z1 + n.z2) / 2;
+    vctx.strokeStyle = hex2rgba(shift(color, 40 * avgZ | 0), 0.4 + avgZ * 0.3);
+    vctx.lineWidth = 1.5;
+    vctx.beginPath();
+    vctx.moveTo(n.x1, n.y);
+    vctx.lineTo(n.x2, n.y);
+    vctx.stroke();
+  }
+  // strand 1
+  vctx.strokeStyle = color;
+  vctx.lineWidth = 3;
+  vctx.shadowColor = color;
+  vctx.shadowBlur = 8;
+  vctx.beginPath();
+  nodes.forEach((n, i) => i === 0 ? vctx.moveTo(n.x1, n.y) : vctx.lineTo(n.x1, n.y));
+  vctx.stroke();
+  // strand 2 — accent-shifted
+  vctx.strokeStyle = shift(color, 80);
+  vctx.beginPath();
+  nodes.forEach((n, i) => i === 0 ? vctx.moveTo(n.x2, n.y) : vctx.lineTo(n.x2, n.y));
+  vctx.stroke();
+  vctx.shadowBlur = 0;
+
+  // nucleotide dots pulse on treble
+  const dotR = 3 + treble * 8;
+  for (const n of nodes) {
+    vctx.fillStyle = n.z1 > 0 ? color : shift(color, -60);
+    vctx.beginPath(); vctx.arc(n.x1, n.y, dotR * (0.6 + Math.abs(n.z1) * 0.4), 0, Math.PI * 2); vctx.fill();
+    vctx.fillStyle = n.z2 > 0 ? shift(color, 80) : shift(color, -60);
+    vctx.beginPath(); vctx.arc(n.x2, n.y, dotR * (0.6 + Math.abs(n.z2) * 0.4), 0, Math.PI * 2); vctx.fill();
+  }
+}
+
+// ---- VORTEX — swirling particles (Y2K screensaver) ----
+const vortexParticles = Array.from({length: 180}, () => ({
+  angle: Math.random() * Math.PI * 2,
+  radius: Math.random() * 0.5 + 0.1,
+  speed: 0.01 + Math.random() * 0.04,
+  size: 1 + Math.random() * 2,
+  hueOffset: Math.random() * 360,
+}));
+function drawVortex(W, H, color, bg) {
+  vctx.fillStyle = hex2rgba(bg, 0.18);
+  vctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) / 2;
+  const bass = avgBand(0, 16) / 255;
+  const mid = avgBand(24, 64) / 255;
+  const pull = 0.998 - bass * 0.004; // bass sucks particles inward
+
+  for (const p of vortexParticles) {
+    p.angle += p.speed + mid * 0.04;
+    p.radius *= pull;
+    if (p.radius < 0.05) p.radius = 1;
+    const x = cx + Math.cos(p.angle) * p.radius * R;
+    const y = cy + Math.sin(p.angle) * p.radius * R;
+    const brightness = 1 - p.radius;
+    vctx.fillStyle = hex2rgba(shift(color, (p.hueOffset % 120) - 60 | 0), brightness);
+    vctx.beginPath();
+    vctx.arc(x, y, p.size + bass * 2, 0, Math.PI * 2);
+    vctx.fill();
+  }
+}
+
+// ---- LASERS — rave-style radiating beams ----
+let laserAngle = 0;
+function drawLasers(W, H, color, bg) {
+  vctx.fillStyle = hex2rgba(bg, 0.25);
+  vctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H * 0.85;
+  const bass = avgBand(0, 16) / 255;
+  const mid = avgBand(24, 64) / 255;
+  const treble = avgBand(60, 120) / 255;
+  laserAngle += 0.015 + bass * 0.05;
+
+  const beams = 12;
+  const maxLen = Math.hypot(W, H);
+  for (let i = 0; i < beams; i++) {
+    const spread = Math.PI * 0.9;
+    const base = -Math.PI / 2 - spread / 2;
+    const a = base + (i / (beams - 1)) * spread + Math.sin(laserAngle + i * 0.4) * 0.2;
+    const len = maxLen * (0.6 + 0.4 * Math.sin(laserAngle * 2 + i));
+    const x2 = cx + Math.cos(a) * len;
+    const y2 = cy + Math.sin(a) * len;
+    const beamColor = i % 3 === 0 ? color : (i % 3 === 1 ? shift(color, 90) : shift(color, -60));
+    // beam glow
+    const grad = vctx.createLinearGradient(cx, cy, x2, y2);
+    grad.addColorStop(0, hex2rgba(beamColor, 0.9));
+    grad.addColorStop(1, hex2rgba(beamColor, 0));
+    vctx.strokeStyle = grad;
+    vctx.lineWidth = 2 + mid * 6;
+    vctx.shadowColor = beamColor;
+    vctx.shadowBlur = 12;
+    vctx.beginPath();
+    vctx.moveTo(cx, cy);
+    vctx.lineTo(x2, y2);
+    vctx.stroke();
+  }
+  vctx.shadowBlur = 0;
+  // emitter dot
+  vctx.fillStyle = color;
+  vctx.shadowColor = color;
+  vctx.shadowBlur = 20;
+  vctx.beginPath();
+  vctx.arc(cx, cy, 6 + treble * 10, 0, Math.PI * 2);
+  vctx.fill();
+  vctx.shadowBlur = 0;
+}
+
+// ---- PIXELS — 8-bit spectrogram grid ----
+let pixelHistory = [];
+function drawPixels(W, H, color, bg) {
+  vctx.fillStyle = bg;
+  vctx.fillRect(0, 0, W, H);
+  const cols = 32;
+  const rows = 20;
+  const cellW = W / cols;
+  const cellH = H / rows;
+  // compute current column
+  const col = new Uint8Array(rows);
+  const step = Math.floor(freqData.length / rows / 2);
+  for (let r = 0; r < rows; r++) {
+    let sum = 0;
+    for (let j = 0; j < step; j++) sum += freqData[r * step + j];
+    col[rows - 1 - r] = sum / step;  // bass at bottom
+  }
+  pixelHistory.unshift(col);
+  if (pixelHistory.length > cols) pixelHistory.length = cols;
+  // draw grid — newer columns on right
+  for (let c = 0; c < pixelHistory.length; c++) {
+    const x = W - (c + 1) * cellW;
+    const column = pixelHistory[c];
+    for (let r = 0; r < rows; r++) {
+      const v = column[r] / 255;
+      if (v < 0.08) continue;
+      // palette: bass = warm, treble = cool
+      let px;
+      if (r > rows * 0.66)      px = shift(color, -40); // bass band (darker)
+      else if (r > rows * 0.33) px = color;
+      else                      px = shift(color, 80);  // treble (brighter)
+      vctx.fillStyle = hex2rgba(px, v);
+      vctx.fillRect(Math.floor(x) + 1, Math.floor(r * cellH) + 1, Math.ceil(cellW) - 2, Math.ceil(cellH) - 2);
+    }
+  }
 }
 
 // ---- helpers ----

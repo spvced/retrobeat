@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="RetroBeat" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<title>RetroBeat ▸ Winamp-style Player</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app" class="theme-classic">
+
+  <!-- Title bar -->
+  <header class="titlebar">
+    <div class="titlebar-left">
+      <span class="logo">◆</span>
+      <span class="title-text">RETROBEAT</span>
+      <span class="title-sub">v1.0</span>
+    </div>
+    <div class="titlebar-right">
+      <button class="tb-btn" id="menu-btn" aria-label="Menu">≡</button>
+    </div>
+  </header>
+
+  <!-- Visualizer canvas -->
+  <section class="viz-panel">
+    <canvas id="viz-canvas"></canvas>
+    <div class="viz-overlay">
+      <div class="viz-info">
+        <div class="track-title marquee" id="track-title">
+          <span>No track loaded — drop a file or connect Google Drive</span>
+        </div>
+        <div class="track-meta">
+          <span id="track-time">00:00</span>
+          <span class="sep">/</span>
+          <span id="track-duration">00:00</span>
+          <span class="sep">|</span>
+          <span id="track-bitrate">--- kbps</span>
+          <span class="sep">|</span>
+          <span id="track-freq">44 kHz</span>
+        </div>
+      </div>
+      <div class="viz-mode-label" id="viz-mode-label">SPECTRUM</div>
+    </div>
+  </section>
+
+  <!-- Transport controls -->
+  <section class="transport">
+    <button class="t-btn" id="prev-btn" aria-label="Previous">⏮</button>
+    <button class="t-btn play" id="play-btn" aria-label="Play">▶</button>
+    <button class="t-btn" id="pause-btn" aria-label="Pause">⏸</button>
+    <button class="t-btn" id="stop-btn" aria-label="Stop">⏹</button>
+    <button class="t-btn" id="next-btn" aria-label="Next">⏭</button>
+    <button class="t-btn sm" id="shuffle-btn" aria-label="Shuffle">⇄</button>
+    <button class="t-btn sm" id="repeat-btn" aria-label="Repeat">↻</button>
+  </section>
+
+  <!-- Seek + volume -->
+  <section class="sliders">
+    <div class="slider-row">
+      <span class="slider-label">POS</span>
+      <input type="range" id="seek" min="0" max="100" value="0" step="0.1" />
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">VOL</span>
+      <input type="range" id="volume" min="0" max="100" value="80" />
+    </div>
+  </section>
+
+  <!-- Viz selector -->
+  <section class="viz-selector">
+    <button class="viz-tab active" data-viz="bars">BARS</button>
+    <button class="viz-tab" data-viz="oscope">SCOPE</button>
+    <button class="viz-tab" data-viz="milkdrop">PLASMA</button>
+    <button class="viz-tab" data-viz="starfield">STARS</button>
+    <button class="viz-tab" data-viz="matrix">MATRIX</button>
+    <button class="viz-tab" data-viz="tunnel">TUNNEL</button>
+    <button class="viz-tab" data-viz="fire">FIRE</button>
+    <button class="viz-tab" data-viz="waves">WAVES</button>
+    <button class="viz-tab" data-viz="rings">RINGS</button>
+    <button class="viz-tab" data-viz="dna">DNA</button>
+    <button class="viz-tab" data-viz="vortex">VORTEX</button>
+    <button class="viz-tab" data-viz="lasers">LASERS</button>
+    <button class="viz-tab" data-viz="pixels">PIXELS</button>
+  </section>
+
+  <!-- Playlist -->
+  <section class="playlist-panel">
+    <div class="panel-header">
+      <span>PLAYLIST</span>
+      <div class="panel-actions">
+        <button class="px-btn" id="load-local-btn" title="Load local files">+ FILE</button>
+        <button class="px-btn" id="load-drive-btn" title="Load from Google Drive">+ DRIVE</button>
+        <button class="px-btn" id="clear-pl-btn" title="Clear">✕</button>
+      </div>
+    </div>
+    <ol class="playlist" id="playlist">
+      <li class="pl-empty">&lt;playlist empty&gt;</li>
+    </ol>
+  </section>
+
+  <!-- Theme bar -->
+  <footer class="themebar">
+    <span class="themebar-label">SKIN</span>
+    <div class="theme-swatches">
+      <button class="swatch" data-theme="classic" title="Classic Winamp" style="--s1:#1a4d2e;--s2:#88ff88"></button>
+      <button class="swatch" data-theme="bento" title="iPod Bento" style="--s1:#e0e0e0;--s2:#333"></button>
+      <button class="swatch" data-theme="neon" title="Neon Grid" style="--s1:#0a0024;--s2:#ff00ff"></button>
+      <button class="swatch" data-theme="aqua" title="OS X Aqua" style="--s1:#a8c8ff;--s2:#1e5fd4"></button>
+      <button class="swatch" data-theme="frutiger" title="Frutiger Aero" style="--s1:#b3e0ff;--s2:#66b2ff"></button>
+      <button class="swatch" data-theme="vaporwave" title="Vaporwave" style="--s1:#ff71ce;--s2:#01cdfe"></button>
+      <button class="swatch" data-theme="metal" title="Brushed Metal" style="--s1:#c0c0c0;--s2:#606060"></button>
+      <button class="swatch" data-theme="luna" title="XP Luna" style="--s1:#245edb;--s2:#3c9b3c"></button>
+    </div>
+  </footer>
+</div>
+
+<!-- Hidden audio element -->
+<audio id="audio" crossorigin="anonymous"></audio>
+<input type="file" id="file-input" multiple style="display:none" />
+
+<!-- Hidden menu drawer -->
+<div id="drawer" class="drawer hidden">
+  <div class="drawer-inner">
+    <h3>SETTINGS</h3>
+    <label class="drawer-row">
+      <span>Google Drive Client ID</span>
+      <input type="text" id="gdrive-cid" placeholder="xxxxxx.apps.googleusercontent.com" />
+    </label>
+    <p class="help">
+      Need a Client ID? Create one free at console.cloud.google.com → APIs &amp; Services → Credentials → OAuth client ID (Web). Add this app's URL to authorized origins.
+    </p>
+    <label class="drawer-row">
+      <span>EQ Preamp</span>
+      <input type="range" id="preamp" min="-12" max="12" value="0" />
+    </label>
+    <button class="px-btn" id="install-btn">INSTALL TO HOME SCREEN</button>
+    <button class="px-btn" id="close-drawer">CLOSE</button>
+    <div class="drawer-about">
+      <p>RetroBeat — a Winamp-inspired PWA music player.</p>
+      <p>Tap theme swatches below to change skins.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="app.js" type="module"></script>
+</body>
+</html>
