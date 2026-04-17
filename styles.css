@@ -1,0 +1,665 @@
+/* ============================================
+   RETROBEAT — Winamp-style PWA
+   Fonts + base
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&family=Orbitron:wght@500;700&family=Silkscreen&family=MS+Madi&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: 'VT323', monospace;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
+}
+
+body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ============================================
+   APP SHELL — grid layout
+   ============================================ */
+#app {
+  display: grid;
+  grid-template-rows:
+    auto              /* titlebar */
+    minmax(180px,1fr) /* viz */
+    auto              /* transport */
+    auto              /* sliders */
+    auto              /* viz selector */
+    minmax(120px,2fr) /* playlist */
+    auto;             /* theme bar */
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100vw;
+  background: var(--bg);
+  color: var(--fg);
+  transition: background .4s, color .4s;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ============================================
+   TITLEBAR
+   ============================================ */
+.titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--titlebar-bg);
+  color: var(--titlebar-fg);
+  border-bottom: var(--bevel-b);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 2px;
+  min-height: 28px;
+}
+.titlebar-left { display: flex; align-items: center; gap: 8px; }
+.logo {
+  color: var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+  font-size: 16px;
+}
+.title-text { font-weight: 700; }
+.title-sub { opacity: 0.55; font-size: 10px; }
+.tb-btn {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: var(--bevel);
+  padding: 2px 10px;
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+.tb-btn:active { border: var(--bevel-in); }
+
+/* ============================================
+   VISUALIZER
+   ============================================ */
+.viz-panel {
+  position: relative;
+  background: var(--viz-bg);
+  border: var(--bevel-in);
+  margin: 6px;
+  overflow: hidden;
+  min-height: 0;
+}
+#viz-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.viz-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+.viz-info {
+  font-family: var(--font-lcd);
+  color: var(--lcd-fg);
+  text-shadow: 0 0 4px var(--lcd-glow);
+  font-size: 18px;
+}
+.track-title {
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1.2;
+  max-width: 100%;
+}
+.track-title span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: marquee 18s linear infinite;
+}
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+.track-meta {
+  font-size: 13px;
+  opacity: 0.85;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+.track-meta .sep { margin: 0 4px; opacity: 0.5; }
+.viz-mode-label {
+  align-self: flex-end;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 3px;
+  padding: 2px 8px;
+  background: rgba(0,0,0,0.4);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+}
+
+/* ============================================
+   TRANSPORT
+   ============================================ */
+.transport {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--panel-bg);
+  border-top: var(--bevel);
+  border-bottom: var(--bevel-b);
+}
+.t-btn {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: var(--bevel);
+  padding: 8px 14px;
+  font-size: 20px;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 44px;
+  transition: transform 0.05s;
+}
+.t-btn.sm { padding: 8px 10px; font-size: 16px; min-width: 36px; }
+.t-btn.play { color: var(--accent); }
+.t-btn:active { border: var(--bevel-in); transform: translateY(1px); }
+.t-btn.active { background: var(--accent); color: var(--bg); }
+
+/* ============================================
+   SLIDERS
+   ============================================ */
+.sliders {
+  padding: 4px 10px;
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: var(--bevel-b);
+}
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.slider-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  min-width: 28px;
+}
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--track-bg);
+  border: var(--bevel-in);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: var(--track-bg);
+  border: var(--bevel-in);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 18px;
+  background: var(--thumb-bg);
+  border: var(--bevel);
+  margin-top: -8px;
+  cursor: grab;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 18px;
+  background: var(--thumb-bg);
+  border: var(--bevel);
+  cursor: grab;
+}
+
+/* ============================================
+   VIZ SELECTOR
+   ============================================ */
+.viz-selector {
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--panel-bg);
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: var(--bevel-b);
+}
+.viz-selector::-webkit-scrollbar { display: none; }
+.viz-tab {
+  flex-shrink: 0;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: var(--bevel);
+  padding: 4px 10px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.viz-tab.active {
+  background: var(--accent);
+  color: var(--bg);
+  border: var(--bevel-in);
+}
+
+/* ============================================
+   PLAYLIST
+   ============================================ */
+.playlist-panel {
+  background: var(--list-bg);
+  border: var(--bevel-in);
+  margin: 0 6px 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--titlebar-bg);
+  color: var(--titlebar-fg);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 2px;
+  border-bottom: var(--bevel-b);
+}
+.panel-actions { display: flex; gap: 4px; }
+.px-btn {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: var(--bevel);
+  padding: 3px 8px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.px-btn:active { border: var(--bevel-in); }
+
+.playlist {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  font-family: var(--font-lcd);
+  font-size: 15px;
+  color: var(--lcd-fg);
+  scrollbar-width: thin;
+}
+.playlist li {
+  padding: 3px 8px;
+  border-bottom: 1px dotted rgba(255,255,255,0.08);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  gap: 6px;
+}
+.playlist li:hover { background: rgba(255,255,255,0.05); }
+.playlist li.active {
+  background: var(--accent);
+  color: var(--bg);
+  text-shadow: none;
+}
+.playlist li .pl-num {
+  opacity: 0.5;
+  min-width: 22px;
+}
+.playlist li .pl-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.playlist li .pl-src {
+  font-size: 9px;
+  opacity: 0.6;
+  align-self: center;
+  font-family: var(--font-display);
+}
+.pl-empty {
+  color: var(--lcd-fg);
+  opacity: 0.4;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+/* ============================================
+   THEME BAR
+   ============================================ */
+.themebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--titlebar-bg);
+  color: var(--titlebar-fg);
+  border-top: var(--bevel);
+}
+.themebar-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.theme-swatches {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 26px;
+  height: 26px;
+  border: var(--bevel);
+  background: linear-gradient(135deg, var(--s1) 50%, var(--s2) 50%);
+  cursor: pointer;
+  padding: 0;
+}
+.swatch:active, .swatch.active {
+  border: var(--bevel-in);
+  transform: scale(0.92);
+}
+
+/* ============================================
+   DRAWER (settings)
+   ============================================ */
+.drawer {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.drawer.hidden { display: none; }
+.drawer-inner {
+  background: var(--panel-bg);
+  color: var(--fg);
+  border: var(--bevel);
+  padding: 16px;
+  width: 100%;
+  max-width: 360px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  font-family: var(--font-display);
+  font-size: 11px;
+}
+.drawer-inner h3 {
+  font-size: 14px;
+  letter-spacing: 3px;
+  margin-bottom: 12px;
+  color: var(--accent);
+}
+.drawer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.drawer-row input[type="text"] {
+  background: var(--track-bg);
+  border: var(--bevel-in);
+  padding: 6px;
+  color: var(--fg);
+  font-family: var(--font-lcd);
+  font-size: 14px;
+}
+.help {
+  font-size: 10px;
+  opacity: 0.7;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  font-family: 'VT323', monospace;
+}
+.drawer-inner .px-btn {
+  width: 100%;
+  padding: 8px;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.drawer-about {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dotted rgba(255,255,255,0.2);
+  font-family: 'VT323', monospace;
+  font-size: 13px;
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+/* ============================================
+   THEMES
+   ============================================ */
+/* CLASSIC WINAMP — green phosphor + grey metal */
+.theme-classic {
+  --bg: #2c2c2c;
+  --fg: #c8c8c8;
+  --panel-bg: #3a3a3a;
+  --titlebar-bg: linear-gradient(180deg, #4a5a6a, #1a2a3a);
+  --titlebar-fg: #c0ddff;
+  --viz-bg: #000;
+  --list-bg: #0a0a0a;
+  --lcd-fg: #00ff4a;
+  --lcd-glow: #00ff4a88;
+  --accent: #00ff4a;
+  --accent-glow: #00ff4a;
+  --btn-bg: #4a4a4a;
+  --btn-fg: #eee;
+  --track-bg: #1a1a1a;
+  --thumb-bg: #888;
+  --bevel: 2px outset #6a6a6a;
+  --bevel-in: 2px inset #6a6a6a;
+  --bevel-b: 1px solid #000;
+  --font-display: 'Press Start 2P', monospace;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* BENTO — iPod white/grey minimal */
+.theme-bento {
+  --bg: #e8e8e8;
+  --fg: #222;
+  --panel-bg: #f4f4f4;
+  --titlebar-bg: linear-gradient(180deg, #fff, #ccc);
+  --titlebar-fg: #222;
+  --viz-bg: #b5c9a8;
+  --list-bg: #fff;
+  --lcd-fg: #1a1a1a;
+  --lcd-glow: transparent;
+  --accent: #0060c0;
+  --accent-glow: #0060c088;
+  --btn-bg: linear-gradient(180deg, #fafafa, #c8c8c8);
+  --btn-fg: #222;
+  --track-bg: #d0d0d0;
+  --thumb-bg: linear-gradient(180deg, #fff, #aaa);
+  --bevel: 1px solid #888;
+  --bevel-in: 1px solid #888;
+  --bevel-b: 1px solid #bbb;
+  --font-display: 'Silkscreen', monospace;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* NEON — cyberpunk magenta grid */
+.theme-neon {
+  --bg: #0a0024;
+  --fg: #ff71ce;
+  --panel-bg: #140038;
+  --titlebar-bg: linear-gradient(180deg, #3a006a, #0a0024);
+  --titlebar-fg: #ff71ce;
+  --viz-bg: #000018;
+  --list-bg: #08001a;
+  --lcd-fg: #ff71ce;
+  --lcd-glow: #ff71ceaa;
+  --accent: #00ffff;
+  --accent-glow: #00ffff;
+  --btn-bg: linear-gradient(180deg, #3a006a, #1a0040);
+  --btn-fg: #ff71ce;
+  --track-bg: #0a0024;
+  --thumb-bg: #ff00ff;
+  --bevel: 1px solid #ff00ff;
+  --bevel-in: 1px solid #00ffff;
+  --bevel-b: 1px solid #ff00ff55;
+  --font-display: 'Orbitron', sans-serif;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* AQUA — OS X 10.0 pinstripe */
+.theme-aqua {
+  --bg: #d6e4f5;
+  --fg: #1a2a3a;
+  --panel-bg: repeating-linear-gradient(0deg, #f0f5fc, #f0f5fc 1px, #e4ecf7 1px, #e4ecf7 2px);
+  --titlebar-bg: linear-gradient(180deg, #e8f0fc, #a8c0e8 50%, #7ea0d0);
+  --titlebar-fg: #1a2a3a;
+  --viz-bg: #1a3a6a;
+  --list-bg: #f8fbff;
+  --lcd-fg: #1a4d9e;
+  --lcd-glow: transparent;
+  --accent: #1e5fd4;
+  --accent-glow: #1e5fd488;
+  --btn-bg: linear-gradient(180deg, #fff, #b8d0ec);
+  --btn-fg: #1a2a3a;
+  --track-bg: #c0d4ec;
+  --thumb-bg: radial-gradient(circle at 30% 30%, #fff, #3a80e0);
+  --bevel: 1px solid #6a8abc;
+  --bevel-in: 1px solid #6a8abc;
+  --bevel-b: 1px solid #4a6aa0;
+  --font-display: 'Orbitron', sans-serif;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* FRUTIGER AERO — glossy sky blue */
+.theme-frutiger {
+  --bg: linear-gradient(180deg, #87ceeb 0%, #b8e2f5 50%, #e0f4ff 100%);
+  --fg: #0a3a5a;
+  --panel-bg: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(180,220,250,0.4));
+  --titlebar-bg: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(150,200,240,0.6));
+  --titlebar-fg: #0a3a5a;
+  --viz-bg: linear-gradient(180deg, #2a6aa0, #87ceeb);
+  --list-bg: rgba(255,255,255,0.5);
+  --lcd-fg: #0a3a5a;
+  --lcd-glow: #ffffff88;
+  --accent: #0070d0;
+  --accent-glow: #00a0ff;
+  --btn-bg: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(180,220,250,0.5));
+  --btn-fg: #0a3a5a;
+  --track-bg: rgba(255,255,255,0.4);
+  --thumb-bg: radial-gradient(circle at 30% 30%, #fff, #66b2ff);
+  --bevel: 1px solid rgba(255,255,255,0.8);
+  --bevel-in: 1px solid rgba(100,140,180,0.4);
+  --bevel-b: 1px solid rgba(100,140,180,0.4);
+  --font-display: 'Orbitron', sans-serif;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* VAPORWAVE — pink/cyan gradient */
+.theme-vaporwave {
+  --bg: linear-gradient(180deg, #ff71ce 0%, #b967ff 50%, #01cdfe 100%);
+  --fg: #fff;
+  --panel-bg: rgba(10,0,60,0.6);
+  --titlebar-bg: linear-gradient(90deg, #ff71ce, #01cdfe);
+  --titlebar-fg: #fff;
+  --viz-bg: #1a0040;
+  --list-bg: rgba(0,0,20,0.6);
+  --lcd-fg: #fffb96;
+  --lcd-glow: #fffb9688;
+  --accent: #fffb96;
+  --accent-glow: #fffb96;
+  --btn-bg: linear-gradient(180deg, #ff71ce, #b967ff);
+  --btn-fg: #fff;
+  --track-bg: rgba(0,0,30,0.6);
+  --thumb-bg: #fffb96;
+  --bevel: 1px solid #fffb96;
+  --bevel-in: 1px solid #01cdfe;
+  --bevel-b: 1px solid #ff71ce;
+  --font-display: 'Orbitron', sans-serif;
+  --font-lcd: 'MS Madi', cursive;
+}
+
+/* BRUSHED METAL — OS X Tiger */
+.theme-metal {
+  --bg: repeating-linear-gradient(90deg, #b8b8b8, #b8b8b8 1px, #c4c4c4 1px, #c4c4c4 2px);
+  --fg: #1a1a1a;
+  --panel-bg: repeating-linear-gradient(90deg, #a8a8a8, #a8a8a8 1px, #b4b4b4 1px, #b4b4b4 2px);
+  --titlebar-bg: repeating-linear-gradient(90deg, #989898, #989898 1px, #a4a4a4 1px, #a4a4a4 2px);
+  --titlebar-fg: #1a1a1a;
+  --viz-bg: #2a2a2a;
+  --list-bg: #f4f4f4;
+  --lcd-fg: #1a1a1a;
+  --lcd-glow: transparent;
+  --accent: #5a5a5a;
+  --accent-glow: #5a5a5a;
+  --btn-bg: linear-gradient(180deg, #e0e0e0, #888);
+  --btn-fg: #1a1a1a;
+  --track-bg: #787878;
+  --thumb-bg: linear-gradient(180deg, #f4f4f4, #787878);
+  --bevel: 1px solid #606060;
+  --bevel-in: 1px solid #606060;
+  --bevel-b: 1px solid #505050;
+  --font-display: 'Silkscreen', monospace;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* LUNA — XP blue */
+.theme-luna {
+  --bg: #ece9d8;
+  --fg: #000;
+  --panel-bg: #ece9d8;
+  --titlebar-bg: linear-gradient(180deg, #0a58d8, #245edb 8%, #3c81f3 40%, #245edb 88%, #0a4abd);
+  --titlebar-fg: #fff;
+  --viz-bg: #0e0e4a;
+  --list-bg: #fff;
+  --lcd-fg: #0a3a8a;
+  --lcd-glow: transparent;
+  --accent: #ff7a00;
+  --accent-glow: #ff7a0088;
+  --btn-bg: linear-gradient(180deg, #fff, #d4e0f4 50%, #c0d0ec);
+  --btn-fg: #000;
+  --track-bg: #d4d0c8;
+  --thumb-bg: linear-gradient(180deg, #fff, #7aa8e0);
+  --bevel: 1px solid #7a7a7a;
+  --bevel-in: 1px inset #7a7a7a;
+  --bevel-b: 1px solid #7a7a7a;
+  --font-display: 'Silkscreen', monospace;
+  --font-lcd: 'VT323', monospace;
+}
+
+/* ============================================
+   TABLET/DESKTOP tweaks
+   ============================================ */
+@media (min-width: 600px) {
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+  }
+  .t-btn { font-size: 22px; padding: 10px 16px; }
+}
+
+/* ============================================
+   Scrollbar styling (webkit)
+   ============================================ */
+.playlist::-webkit-scrollbar { width: 8px; }
+.playlist::-webkit-scrollbar-track { background: var(--track-bg); }
+.playlist::-webkit-scrollbar-thumb {
+  background: var(--thumb-bg);
+  border: 1px solid rgba(0,0,0,0.4);
+}
