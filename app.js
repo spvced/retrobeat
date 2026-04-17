@@ -11,9 +11,14 @@ let audioCtx = null;
 let analyser = null;
 let sourceNode = null;
 let gainNode = null;
+let preampNode = null;
+let eqFilters = [];     // 8 biquad filters
 let freqData = null;    // Uint8Array frequency
 let timeData = null;    // Uint8Array waveform
 let peakData = null;    // smoothed peaks for bars
+
+// EQ band center frequencies (classic Winamp 8-band)
+const EQ_FREQS = [60, 170, 310, 600, 1000, 3000, 6000, 12000];
 
 function initAudioGraph() {
   if (audioCtx) return;
@@ -23,12 +28,41 @@ function initAudioGraph() {
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.75;
   gainNode = audioCtx.createGain();
-  sourceNode.connect(analyser);
+
+  // Preamp (simple gain before EQ chain)
+  preampNode = audioCtx.createGain();
+  preampNode.gain.value = 1.0;
+
+  // Build 8-band EQ chain: source -> preamp -> f0 -> f1 -> ... -> f7 -> analyser -> gain -> dest
+  eqFilters = EQ_FREQS.map((freq, i) => {
+    const f = audioCtx.createBiquadFilter();
+    // outer bands use shelf filters; inner bands use peaking — same Winamp behavior
+    if (i === 0)                       f.type = 'lowshelf';
+    else if (i === EQ_FREQS.length - 1) f.type = 'highshelf';
+    else                               f.type = 'peaking';
+    f.frequency.value = freq;
+    f.Q.value = 1.0;
+    f.gain.value = 0;
+    return f;
+  });
+
+  // Wire the chain
+  sourceNode.connect(preampNode);
+  let node = preampNode;
+  for (const f of eqFilters) {
+    node.connect(f);
+    node = f;
+  }
+  node.connect(analyser);
   analyser.connect(gainNode);
   gainNode.connect(audioCtx.destination);
+
   freqData = new Uint8Array(analyser.frequencyBinCount);
   timeData = new Uint8Array(analyser.frequencyBinCount);
   peakData = new Float32Array(64);
+
+  // Apply any stored EQ state now that the nodes exist
+  applyEQState();
 }
 
 // ---- Playlist state ----
@@ -42,6 +76,11 @@ const state = {
   volume: 0.8,
   driveClientId: '',
   driveToken: null,
+  eqEnabled: true,
+  eqGains: [0,0,0,0,0,0,0,0],  // dB per band
+  eqPreamp: 0,                  // dB
+  eqPreset: 'flat',
+  fullscreen: false,
 };
 
 // Persist + restore settings
@@ -58,6 +97,10 @@ function loadSettings() {
       state.driveClientId = s.driveClientId;
       $('gdrive-cid').value = s.driveClientId;
     }
+    if (Array.isArray(s.eqGains) && s.eqGains.length === 8) state.eqGains = s.eqGains;
+    if (typeof s.eqPreamp === 'number') state.eqPreamp = s.eqPreamp;
+    if (typeof s.eqEnabled === 'boolean') state.eqEnabled = s.eqEnabled;
+    if (s.eqPreset) state.eqPreset = s.eqPreset;
   } catch (e) {}
 }
 function saveSettings() {
@@ -66,6 +109,10 @@ function saveSettings() {
     viz: state.viz,
     volume: state.volume,
     driveClientId: state.driveClientId,
+    eqGains: state.eqGains,
+    eqPreamp: state.eqPreamp,
+    eqEnabled: state.eqEnabled,
+    eqPreset: state.eqPreset,
   }));
 }
 
@@ -83,6 +130,7 @@ function setTheme(name) {
     classic: '#1a2a3a', bento: '#e8e8e8', neon: '#0a0024',
     aqua: '#a8c0e8', frutiger: '#87ceeb', vaporwave: '#ff71ce',
     metal: '#a8a8a8', luna: '#245edb',
+    amber: '#1a0e00', milkdrop: '#0a0030', gameboy: '#306230', y2k: '#7d95b8',
   };
   document.querySelector('meta[name="theme-color"]').content = themeColors[name] || '#000';
   saveSettings();
@@ -997,12 +1045,171 @@ if ('serviceWorker' in navigator) {
 }
 
 // ============================================
+// 8-BAND EQ
+// ============================================
+const EQ_PRESETS = {
+  flat:      [0, 0, 0, 0, 0, 0, 0, 0],
+  rock:      [5, 3, -2, -4, -1, 2, 5, 6],
+  pop:       [-1, 2, 4, 5, 3, 0, -1, -1],
+  dance:     [7, 5, 2, 0, -1, 1, 4, 6],
+  jazz:      [4, 3, 1, 2, -2, -1, 0, 3],
+  classical: [4, 3, 0, 0, 0, 0, -3, -4],
+  bass:      [8, 6, 4, 2, 0, 0, 0, 0],
+  vocal:     [-2, -3, 0, 3, 4, 3, 1, -1],
+  trance:    [6, 4, 1, -1, -1, 2, 5, 7],
+};
+
+function applyEQState() {
+  if (!audioCtx) return;
+  // If disabled, set all band gains to 0 (bypass) but keep nodes connected
+  for (let i = 0; i < eqFilters.length; i++) {
+    eqFilters[i].gain.value = state.eqEnabled ? state.eqGains[i] : 0;
+  }
+  // Preamp in dB -> gain multiplier
+  const preampGain = state.eqEnabled ? Math.pow(10, state.eqPreamp / 20) : 1;
+  if (preampNode) preampNode.gain.value = preampGain;
+}
+
+function buildEQBands() {
+  const container = $('eq-bands');
+  container.innerHTML = '';
+  EQ_FREQS.forEach((freq, i) => {
+    const div = document.createElement('div');
+    div.className = 'eq-band';
+    const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
+    div.innerHTML = `
+      <span class="eq-band-val" id="eq-val-${i}">${state.eqGains[i].toFixed(0)}</span>
+      <input type="range" class="eq-band-slider" id="eq-slider-${i}"
+             min="-12" max="12" step="0.5" value="${state.eqGains[i]}" orient="vertical" />
+      <span class="eq-band-hz">${label}</span>
+    `;
+    container.appendChild(div);
+    const slider = div.querySelector('input');
+    const valEl  = div.querySelector('.eq-band-val');
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      state.eqGains[i] = v;
+      valEl.textContent = v.toFixed(0);
+      state.eqPreset = 'custom';
+      $('eq-preset').value = 'flat'; // no custom in select — just deselect
+      applyEQState();
+      saveSettings();
+    });
+  });
+}
+
+function refreshEQUI() {
+  for (let i = 0; i < 8; i++) {
+    const sl = $(`eq-slider-${i}`);
+    const vl = $(`eq-val-${i}`);
+    if (sl) sl.value = state.eqGains[i];
+    if (vl) vl.textContent = state.eqGains[i].toFixed(0);
+  }
+  $('eq-preamp').value = state.eqPreamp;
+  $('eq-preamp-val').textContent = `${state.eqPreamp > 0 ? '+' : ''}${state.eqPreamp.toFixed(1)}dB`;
+  $('eq-enable').checked = state.eqEnabled;
+}
+
+$('eq-btn').addEventListener('click', () => {
+  $('eq-panel').classList.remove('hidden');
+  refreshEQUI();
+});
+$('eq-close').addEventListener('click', () => $('eq-panel').classList.add('hidden'));
+
+$('eq-preset').addEventListener('change', (e) => {
+  const preset = e.target.value;
+  if (EQ_PRESETS[preset]) {
+    state.eqGains = [...EQ_PRESETS[preset]];
+    state.eqPreset = preset;
+    applyEQState();
+    refreshEQUI();
+    saveSettings();
+  }
+});
+
+$('eq-enable').addEventListener('change', (e) => {
+  state.eqEnabled = e.target.checked;
+  applyEQState();
+  saveSettings();
+});
+
+$('eq-preamp').addEventListener('input', (e) => {
+  state.eqPreamp = parseFloat(e.target.value);
+  $('eq-preamp-val').textContent = `${state.eqPreamp > 0 ? '+' : ''}${state.eqPreamp.toFixed(1)}dB`;
+  applyEQState();
+  saveSettings();
+});
+
+$('eq-reset').addEventListener('click', () => {
+  state.eqGains = [0,0,0,0,0,0,0,0];
+  state.eqPreamp = 0;
+  state.eqPreset = 'flat';
+  $('eq-preset').value = 'flat';
+  applyEQState();
+  refreshEQUI();
+  saveSettings();
+});
+
+// ============================================
+// FULLSCREEN viz
+// ============================================
+$('viz-fs-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleFullscreen();
+});
+
+function toggleFullscreen() {
+  const panel = $('viz-panel');
+  state.fullscreen = !state.fullscreen;
+  panel.classList.toggle('fullscreen', state.fullscreen);
+  // Try real browser fullscreen for immersive experience
+  if (state.fullscreen) {
+    if (panel.requestFullscreen) panel.requestFullscreen().catch(() => {});
+    else if (panel.webkitRequestFullscreen) panel.webkitRequestFullscreen();
+  } else {
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+  // Force canvas resize after layout settles
+  setTimeout(resizeCanvas, 50);
+  setTimeout(resizeCanvas, 300);
+}
+
+// Sync state if user exits FS via OS
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && state.fullscreen) {
+    state.fullscreen = false;
+    $('viz-panel').classList.remove('fullscreen');
+    setTimeout(resizeCanvas, 50);
+  }
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if (!document.webkitFullscreenElement && state.fullscreen) {
+    state.fullscreen = false;
+    $('viz-panel').classList.remove('fullscreen');
+    setTimeout(resizeCanvas, 50);
+  }
+});
+
+// Double-tap viz to toggle fullscreen as well
+let lastTapTime = 0;
+$('viz-panel').addEventListener('click', (e) => {
+  // ignore fullscreen button taps (already handled)
+  if (e.target.closest('#viz-fs-btn')) return;
+  const now = Date.now();
+  if (now - lastTapTime < 400) toggleFullscreen();
+  lastTapTime = now;
+});
+
+// ============================================
 // INIT
 // ============================================
 loadSettings();
 renderPlaylist();
 setTheme(state.theme || 'classic');
 setViz(state.viz || 'bars');
+buildEQBands();
+$('eq-preset').value = state.eqPreset in EQ_PRESETS ? state.eqPreset : 'flat';
 
 // Media session (lock screen controls on phones)
 if ('mediaSession' in navigator) {
