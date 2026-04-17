@@ -1,5 +1,5 @@
 // RetroBeat service worker — caches app shell for offline use
-const CACHE = 'retrobeat-v2';
+const CACHE = 'retrobeat-v3';
 const ASSETS = [
   './',
   './index.html',
