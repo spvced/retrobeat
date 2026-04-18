@@ -117,6 +117,129 @@ function saveSettings() {
 }
 
 // ============================================
+// PERSISTENT PLAYLIST (IndexedDB for files, localStorage for drive refs)
+// ============================================
+let idb = null;
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    if (idb) return resolve(idb);
+    const req = indexedDB.open('retrobeat-db', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('files')) {
+        db.createObjectStore('files', { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = (e) => { idb = e.target.result; resolve(idb); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPutFile(id, name, blob) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('files', 'readwrite');
+    tx.objectStore('files').put({ id, name, blob, savedAt: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbGetFile(id) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('files', 'readonly');
+    const req = tx.objectStore('files').get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbDeleteFile(id) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('files', 'readwrite');
+    tx.objectStore('files').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbListFiles() {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('files', 'readonly');
+    const req = tx.objectStore('files').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror  = () => reject(req.error);
+  });
+}
+
+async function idbClearFiles() {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('files', 'readwrite');
+    tx.objectStore('files').clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Save the playlist metadata (everything except blob URLs) for next launch
+function savePlaylistMeta() {
+  // only drive entries + local entries that have persistentId are saved
+  const meta = state.playlist.map(t => ({
+    id: t.id,
+    name: t.name,
+    source: t.source,
+    driveId: t.driveId,
+    persistentId: t.persistentId,  // IDB key if local
+  }));
+  localStorage.setItem('retrobeat-playlist', JSON.stringify({
+    tracks: meta,
+    currentIndex: state.currentIndex,
+  }));
+}
+
+// Rebuild playlist on startup — recreate blob URLs for local files
+async function restorePlaylist() {
+  try {
+    const raw = localStorage.getItem('retrobeat-playlist');
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    const restored = [];
+    for (const t of saved.tracks || []) {
+      if (t.source === 'local' && t.persistentId) {
+        const rec = await idbGetFile(t.persistentId).catch(() => null);
+        if (rec && rec.blob) {
+          restored.push({
+            id: t.id,
+            name: t.name,
+            source: 'local',
+            url: URL.createObjectURL(rec.blob),
+            persistentId: t.persistentId,
+          });
+        }
+      } else if (t.source === 'drive' && t.driveId) {
+        // Store the reference; playback will trigger reauth if needed
+        restored.push({
+          id: t.id,
+          name: t.name,
+          source: 'drive',
+          driveId: t.driveId,
+        });
+      }
+    }
+    state.playlist = restored;
+    if (typeof saved.currentIndex === 'number' && saved.currentIndex < restored.length) {
+      state.currentIndex = saved.currentIndex;
+    }
+  } catch (e) {
+    console.warn('restorePlaylist failed', e);
+  }
+}
+
+// ============================================
 // THEMES
 // ============================================
 function setTheme(name) {
@@ -164,7 +287,9 @@ function setViz(name) {
     bars: 'SPECTRUM', oscope: 'OSCILLOSCOPE', milkdrop: 'PLASMA',
     starfield: 'STARFIELD', matrix: 'MATRIX', tunnel: 'TUNNEL', fire: 'FIRE',
     waves: 'WAVEFORM', rings: 'RINGS', dna: 'DNA HELIX',
-    vortex: 'VORTEX', lasers: 'LASERS', pixels: 'PIXELS'
+    vortex: 'VORTEX', lasers: 'LASERS', pixels: 'PIXELS',
+    pacman: 'PAC-MAN', tetris: 'TETRIS', pong: 'PONG',
+    dvd: 'DVD LOGO', rainbow: 'RAINBOW RD', banana: 'DANCING BANANA'
   }[name] || name.toUpperCase();
   saveSettings();
 }
@@ -240,6 +365,12 @@ function draw() {
     case 'vortex':    drawVortex(W, H, accent, bg); break;
     case 'lasers':    drawLasers(W, H, accent, bg); break;
     case 'pixels':    drawPixels(W, H, accent, bg); break;
+    case 'pacman':    drawPacman(W, H, accent, bg); break;
+    case 'tetris':    drawTetris(W, H, accent, bg); break;
+    case 'pong':      drawPong(W, H, accent, bg); break;
+    case 'dvd':       drawDVD(W, H, accent, bg); break;
+    case 'rainbow':   drawRainbow(W, H, accent, bg); break;
+    case 'banana':    drawBanana(W, H, accent, bg); break;
   }
 }
 requestAnimationFrame(draw);
@@ -719,6 +850,344 @@ function drawPixels(W, H, color, bg) {
   }
 }
 
+// ---- PAC-MAN — chomps across the screen eating dots, reacts to bass ----
+const pacman = { x: -40, y: 0, mouth: 0, dots: [], ghosts: [] };
+function drawPacman(W, H, color, bg) {
+  vctx.fillStyle = hex2rgba(bg, 0.4);
+  vctx.fillRect(0, 0, W, H);
+  const bass = avgBand(0, 16) / 255;
+  const mid = avgBand(24, 64) / 255;
+  pacman.y = H * 0.5;
+
+  // spawn dots
+  if (pacman.dots.length < 8 && Math.random() < 0.05) {
+    pacman.dots.push({ x: W + Math.random() * 40, y: H * (0.2 + Math.random() * 0.6), size: 3 + Math.random() * 3 });
+  }
+  // spawn ghosts on big hits
+  if (mid > 0.55 && pacman.ghosts.length < 3 && Math.random() < 0.08) {
+    const colors = ['#ff0000', '#ffb8de', '#00ffff', '#ffb852'];
+    pacman.ghosts.push({ x: W + 30, y: H * (0.2 + Math.random() * 0.6), color: colors[Math.floor(Math.random() * 4)] });
+  }
+
+  // move
+  const speed = 2 + bass * 8;
+  pacman.x += speed;
+  if (pacman.x > W + 40) pacman.x = -40;
+  pacman.mouth = (pacman.mouth + 0.2 + bass * 0.4) % (Math.PI * 2);
+
+  for (const d of pacman.dots) d.x -= speed;
+  pacman.dots = pacman.dots.filter(d => {
+    if (Math.hypot(d.x - pacman.x, d.y - pacman.y) < 20) return false; // eaten
+    return d.x > -10;
+  });
+  for (const g of pacman.ghosts) g.x -= speed * 0.7;
+  pacman.ghosts = pacman.ghosts.filter(g => g.x > -30);
+
+  // dots
+  vctx.fillStyle = '#ffeb99';
+  for (const d of pacman.dots) {
+    vctx.beginPath(); vctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); vctx.fill();
+  }
+
+  // ghosts
+  for (const g of pacman.ghosts) {
+    vctx.fillStyle = g.color;
+    vctx.beginPath();
+    vctx.arc(g.x, g.y, 18, Math.PI, 0);
+    vctx.lineTo(g.x + 18, g.y + 18);
+    // wavy bottom
+    for (let i = 3; i >= 0; i--) {
+      vctx.lineTo(g.x + (i * 9 - 13.5), g.y + (i % 2 === 0 ? 18 : 12));
+    }
+    vctx.closePath(); vctx.fill();
+    // eyes
+    vctx.fillStyle = '#fff';
+    vctx.beginPath(); vctx.arc(g.x - 6, g.y - 2, 4, 0, Math.PI * 2); vctx.fill();
+    vctx.beginPath(); vctx.arc(g.x + 6, g.y - 2, 4, 0, Math.PI * 2); vctx.fill();
+    vctx.fillStyle = '#0000ff';
+    vctx.beginPath(); vctx.arc(g.x - 6, g.y - 2, 2, 0, Math.PI * 2); vctx.fill();
+    vctx.beginPath(); vctx.arc(g.x + 6, g.y - 2, 2, 0, Math.PI * 2); vctx.fill();
+  }
+
+  // pac-man himself
+  const open = 0.15 + (Math.sin(pacman.mouth) * 0.5 + 0.5) * 0.6;
+  vctx.fillStyle = '#ffeb3b';
+  vctx.shadowColor = '#ffeb3b'; vctx.shadowBlur = 10;
+  vctx.beginPath();
+  vctx.arc(pacman.x, pacman.y, 22, open, -open);
+  vctx.lineTo(pacman.x, pacman.y);
+  vctx.closePath(); vctx.fill();
+  vctx.shadowBlur = 0;
+  // eye
+  vctx.fillStyle = '#000';
+  vctx.beginPath(); vctx.arc(pacman.x - 2, pacman.y - 10, 3, 0, Math.PI * 2); vctx.fill();
+}
+
+// ---- TETRIS — falling blocks driven by frequency ranges ----
+const TETRIS_COLORS = ['#00f0f0', '#f0f000', '#a000f0', '#00f000', '#f00000', '#0000f0', '#f0a000'];
+let tetrisBoard = null;
+let tetrisCols = 10;
+let tetrisRows = 16;
+let tetrisTick = 0;
+function initTetris() {
+  tetrisBoard = [];
+  for (let r = 0; r < tetrisRows; r++) tetrisBoard.push(new Array(tetrisCols).fill(null));
+}
+function drawTetris(W, H, color, bg) {
+  if (!tetrisBoard) initTetris();
+  vctx.fillStyle = bg;
+  vctx.fillRect(0, 0, W, H);
+  const bass = avgBand(0, 16) / 255;
+  const mid = avgBand(24, 64) / 255;
+
+  tetrisTick += 1 + bass * 2;
+  // drop rows + spawn when tick hits
+  if (tetrisTick > 20) {
+    tetrisTick = 0;
+    // clear full rows
+    tetrisBoard = tetrisBoard.filter(row => row.some(c => c === null));
+    while (tetrisBoard.length < tetrisRows) tetrisBoard.unshift(new Array(tetrisCols).fill(null));
+
+    // seed some blocks in top row based on spectrum
+    for (let c = 0; c < tetrisCols; c++) {
+      const bucket = Math.floor((c / tetrisCols) * 64);
+      const energy = freqData[bucket] / 255;
+      if (energy > 0.35 + Math.random() * 0.2) {
+        tetrisBoard[0][c] = TETRIS_COLORS[bucket % TETRIS_COLORS.length];
+      }
+    }
+    // gravity: shift blocks down
+    for (let r = tetrisRows - 1; r > 0; r--) {
+      for (let c = 0; c < tetrisCols; c++) {
+        if (tetrisBoard[r][c] === null && tetrisBoard[r - 1][c] !== null) {
+          tetrisBoard[r][c] = tetrisBoard[r - 1][c];
+          tetrisBoard[r - 1][c] = null;
+        }
+      }
+    }
+  }
+
+  const cellSize = Math.min(W / tetrisCols, H / tetrisRows);
+  const offsetX = (W - cellSize * tetrisCols) / 2;
+  const offsetY = H - cellSize * tetrisRows;
+  for (let r = 0; r < tetrisRows; r++) {
+    for (let c = 0; c < tetrisCols; c++) {
+      const cell = tetrisBoard[r][c];
+      if (!cell) continue;
+      const x = offsetX + c * cellSize;
+      const y = offsetY + r * cellSize;
+      vctx.fillStyle = cell;
+      vctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+      // inner highlight
+      vctx.fillStyle = 'rgba(255,255,255,0.35)';
+      vctx.fillRect(x + 2, y + 2, cellSize - 4, 3);
+    }
+  }
+}
+
+// ---- PONG — two paddles rally, ball reacts to beat ----
+const pong = {
+  ball: { x: 0, y: 0, vx: 3, vy: 2 },
+  p1: 0.5, p2: 0.5, score1: 0, score2: 0, init: false,
+};
+function drawPong(W, H, color, bg) {
+  if (!pong.init) { pong.ball.x = W/2; pong.ball.y = H/2; pong.init = true; }
+  vctx.fillStyle = hex2rgba(bg, 0.6);
+  vctx.fillRect(0, 0, W, H);
+  const bass = avgBand(0, 16) / 255;
+  const treble = avgBand(60, 120) / 255;
+
+  // dashed center line
+  vctx.strokeStyle = color;
+  vctx.lineWidth = 2;
+  vctx.setLineDash([6, 6]);
+  vctx.beginPath(); vctx.moveTo(W/2, 0); vctx.lineTo(W/2, H); vctx.stroke();
+  vctx.setLineDash([]);
+
+  // track paddles toward ball + noise
+  const targetP1 = pong.ball.y / H;
+  const targetP2 = pong.ball.y / H + Math.sin(Date.now() / 500) * 0.1;
+  pong.p1 += (targetP1 - pong.p1) * (0.08 + treble * 0.08);
+  pong.p2 += (targetP2 - pong.p2) * (0.08 + treble * 0.08);
+
+  const padH = H * 0.16;
+  const padW = 6;
+  vctx.fillStyle = color;
+  vctx.fillRect(10, pong.p1 * H - padH/2, padW, padH);
+  vctx.fillRect(W - 10 - padW, pong.p2 * H - padH/2, padW, padH);
+
+  // ball physics with bass-scaled speed
+  const speed = 1 + bass * 5;
+  pong.ball.x += pong.ball.vx * speed;
+  pong.ball.y += pong.ball.vy * speed;
+  if (pong.ball.y < 5 || pong.ball.y > H - 5) pong.ball.vy *= -1;
+  // paddle collisions
+  if (pong.ball.x < 20 && Math.abs(pong.ball.y - pong.p1 * H) < padH/2) { pong.ball.vx = Math.abs(pong.ball.vx); pong.ball.vy += (Math.random() - 0.5) * 2; }
+  if (pong.ball.x > W - 20 && Math.abs(pong.ball.y - pong.p2 * H) < padH/2) { pong.ball.vx = -Math.abs(pong.ball.vx); pong.ball.vy += (Math.random() - 0.5) * 2; }
+  if (pong.ball.x < -10) { pong.score2++; pong.ball.x = W/2; pong.ball.y = H/2; pong.ball.vx = 3; }
+  if (pong.ball.x > W + 10) { pong.score1++; pong.ball.x = W/2; pong.ball.y = H/2; pong.ball.vx = -3; }
+
+  // ball
+  vctx.shadowColor = color; vctx.shadowBlur = 8;
+  vctx.fillRect(pong.ball.x - 5, pong.ball.y - 5, 10, 10);
+  vctx.shadowBlur = 0;
+
+  // scores
+  vctx.font = 'bold 28px monospace';
+  vctx.fillStyle = hex2rgba(color, 0.5);
+  vctx.textAlign = 'center';
+  vctx.fillText(pong.score1, W * 0.3, 36);
+  vctx.fillText(pong.score2, W * 0.7, 36);
+}
+
+// ---- DVD LOGO — bounces around, beat colors change ----
+const dvd = { x: 100, y: 100, vx: 2, vy: 1.5, hue: 0, hits: 0 };
+function drawDVD(W, H, color, bg) {
+  vctx.fillStyle = hex2rgba(bg, 0.5);
+  vctx.fillRect(0, 0, W, H);
+  const bass = avgBand(0, 16) / 255;
+  const speed = 1 + bass * 4;
+  dvd.x += dvd.vx * speed;
+  dvd.y += dvd.vy * speed;
+
+  const boxW = 110, boxH = 50;
+  let corner = false;
+  if (dvd.x < 0) { dvd.x = 0; dvd.vx = Math.abs(dvd.vx); corner = true; }
+  if (dvd.x + boxW > W) { dvd.x = W - boxW; dvd.vx = -Math.abs(dvd.vx); corner = true; }
+  if (dvd.y < 0) { dvd.y = 0; dvd.vy = Math.abs(dvd.vy); corner = true; }
+  if (dvd.y + boxH > H) { dvd.y = H - boxH; dvd.vy = -Math.abs(dvd.vy); corner = true; }
+  if (corner) { dvd.hue = (dvd.hue + 47) % 360; dvd.hits++; }
+
+  const [r, g, b] = hsl2rgb(dvd.hue, 0.9, 0.6);
+  vctx.fillStyle = `rgb(${r},${g},${b})`;
+  vctx.shadowColor = `rgb(${r},${g},${b})`;
+  vctx.shadowBlur = 12;
+  // pill shape
+  vctx.beginPath();
+  vctx.ellipse(dvd.x + boxW/2, dvd.y + boxH/2, boxW/2, boxH/2, 0, 0, Math.PI * 2);
+  vctx.fill();
+  vctx.shadowBlur = 0;
+  // DVD text
+  vctx.fillStyle = '#000';
+  vctx.font = 'bold 24px Arial';
+  vctx.textAlign = 'center';
+  vctx.textBaseline = 'middle';
+  vctx.fillText('DVD', dvd.x + boxW/2, dvd.y + boxH/2 - 2);
+  vctx.font = 'bold 10px Arial';
+  vctx.fillText('VIDEO', dvd.x + boxW/2, dvd.y + boxH/2 + 14);
+  vctx.textBaseline = 'alphabetic';
+}
+
+// ---- RAINBOW ROAD — Mario Kart style perspective road ----
+let rrOffset = 0;
+function drawRainbow(W, H, color, bg) {
+  vctx.fillStyle = '#000';
+  vctx.fillRect(0, 0, W, H);
+  // stars
+  vctx.fillStyle = '#fff';
+  for (let i = 0; i < 40; i++) {
+    const x = (i * 137.5) % W;
+    const y = ((i * 91.7 + Date.now() / 50) % (H * 0.5));
+    vctx.fillRect(x, y, 1, 1);
+  }
+  const bass = avgBand(0, 16) / 255;
+  const mid = avgBand(24, 64) / 255;
+  rrOffset += 4 + bass * 10;
+
+  const horizon = H * 0.5;
+  const vp = W / 2;
+  const rainbow = ['#ff0000', '#ff8800', '#ffee00', '#00cc00', '#0088ff', '#7733ff', '#ff00cc'];
+  // perspective road: draw horizontal strips from bottom up
+  for (let y = H; y > horizon; y -= 2) {
+    const t = (y - horizon) / (H - horizon);       // 0 at horizon, 1 at bottom
+    const bandW = 140 * t + 40 * mid;
+    const ox = (rrOffset * (1 - t * 0.8)) % (bandW * 7);
+    for (let i = -2; i < 8; i++) {
+      const stripeLeft = vp - (bandW * 7) / 2 + i * bandW + (ox - bandW);
+      vctx.fillStyle = rainbow[(i + Math.floor(rrOffset / 40)) % 7];
+      vctx.fillRect(stripeLeft, y, bandW + 1, 2);
+    }
+  }
+  // lane edges
+  vctx.strokeStyle = '#fff';
+  vctx.lineWidth = 2;
+  vctx.beginPath(); vctx.moveTo(vp - 500, H); vctx.lineTo(vp - 50, horizon); vctx.stroke();
+  vctx.beginPath(); vctx.moveTo(vp + 500, H); vctx.lineTo(vp + 50, horizon); vctx.stroke();
+  // horizon glow
+  const grad = vctx.createLinearGradient(0, horizon - 60, 0, horizon);
+  grad.addColorStop(0, 'rgba(255,100,255,0)');
+  grad.addColorStop(1, `rgba(255,100,255,${0.3 + mid * 0.5})`);
+  vctx.fillStyle = grad;
+  vctx.fillRect(0, horizon - 60, W, 60);
+}
+
+// ---- DANCING BANANA — the ASCII-art meme, dances to beat ----
+let bananaFrame = 0;
+let bananaTick = 0;
+function drawBanana(W, H, color, bg) {
+  vctx.fillStyle = bg;
+  vctx.fillRect(0, 0, W, H);
+  const bass = avgBand(0, 16) / 255;
+  const mid = avgBand(24, 64) / 255;
+  bananaTick += 0.3 + bass * 1.5;
+  if (bananaTick > 1) { bananaFrame = (bananaFrame + 1) % 4; bananaTick = 0; }
+
+  const cx = W / 2;
+  const cy = H / 2;
+  const scale = Math.min(W, H) / 240 * (1 + bass * 0.3);
+  vctx.save();
+  vctx.translate(cx, cy);
+  vctx.scale(scale, scale);
+  // wobble
+  vctx.rotate(Math.sin(Date.now() / 200) * 0.15 * (1 + mid));
+
+  // Draw a cartoon banana
+  vctx.fillStyle = '#ffe135';
+  vctx.strokeStyle = '#000';
+  vctx.lineWidth = 3;
+  // Body curve (banana shape via bezier)
+  vctx.beginPath();
+  vctx.moveTo(-50, 40);
+  vctx.bezierCurveTo(-70, -20, -20, -70, 60, -50);
+  vctx.bezierCurveTo(40, -20, 0, 40, -50, 40);
+  vctx.closePath();
+  vctx.fill();
+  vctx.stroke();
+  // Stem
+  vctx.fillStyle = '#5a3a00';
+  vctx.fillRect(52, -58, 10, 16);
+  vctx.strokeRect(52, -58, 10, 16);
+  // Eyes
+  vctx.fillStyle = '#000';
+  const blinkY = Math.sin(Date.now() / 400) > 0.9 ? 1 : 4;
+  vctx.beginPath(); vctx.ellipse(-10, -15, 3, blinkY, 0, 0, Math.PI * 2); vctx.fill();
+  vctx.beginPath(); vctx.ellipse(20, -20, 3, blinkY, 0, 0, Math.PI * 2); vctx.fill();
+  // Smile
+  vctx.beginPath();
+  vctx.arc(5, -5, 10 + bass * 4, 0.1, Math.PI - 0.1);
+  vctx.stroke();
+  // Arms/legs sway
+  const wave = Math.sin(Date.now() / 150) * 20;
+  vctx.fillStyle = '#ffe135'; vctx.lineWidth = 4;
+  vctx.beginPath();
+  vctx.moveTo(-45, 30); vctx.lineTo(-65 + wave, 60 - wave * 0.5); vctx.stroke();
+  vctx.beginPath();
+  vctx.moveTo(45, 20); vctx.lineTo(65 - wave, 60 + wave * 0.5); vctx.stroke();
+  vctx.restore();
+
+  // "PEANUT BUTTER JELLY TIME" text that blinks
+  if (Math.floor(Date.now() / 400) % 2 === 0) {
+    vctx.fillStyle = '#ff00ff';
+    vctx.strokeStyle = '#fff';
+    vctx.lineWidth = 3;
+    vctx.font = 'bold ' + Math.floor(W * 0.055) + 'px Impact, sans-serif';
+    vctx.textAlign = 'center';
+    const msg = 'PEANUT BUTTER JELLY TIME';
+    vctx.strokeText(msg, W/2, H - 20);
+    vctx.fillText(msg, W/2, H - 20);
+  }
+}
+
 // ---- helpers ----
 function avgBand(lo, hi) {
   let sum = 0;
@@ -809,12 +1278,13 @@ $('volume').addEventListener('input', (e) => {
 });
 audio.volume = state.volume;
 
-function prevTrack() {
+let prevTrack = function() {
   if (state.playlist.length === 0) return;
   state.currentIndex = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
   loadTrack(state.currentIndex, true);
-}
-function nextTrack(autoplay = false) {
+  savePlaylistMeta();
+};
+let nextTrack = function(autoplay = false) {
   if (state.playlist.length === 0) return;
   if (state.shuffle) {
     state.currentIndex = Math.floor(Math.random() * state.playlist.length);
@@ -828,20 +1298,35 @@ function nextTrack(autoplay = false) {
     }
   }
   loadTrack(state.currentIndex, autoplay || !audio.paused);
-}
+  savePlaylistMeta();
+};
 
-async function loadTrack(idx, autoplay = true) {
+let loadTrack = async function(idx, autoplay = true) {
   const t = state.playlist[idx];
   if (!t) return;
   $('track-title').querySelector('span').textContent = t.name;
   renderPlaylist();
   try {
     if (t.source === 'drive') {
-      // Fetch via drive token; create blob URL for seek support
-      if (!state.driveToken) return flash('Drive token expired');
-      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${t.driveId}?alt=media`, {
+      // Fetch via drive token; auto-reauth if token is gone/expired
+      if (!state.driveToken) {
+        flash('Drive signin required…');
+        await connectDrive();
+        if (!state.driveToken) return flash('Drive signin cancelled');
+      }
+      let res = await fetch(`https://www.googleapis.com/drive/v3/files/${t.driveId}?alt=media`, {
         headers: { Authorization: `Bearer ${state.driveToken}` }
       });
+      if (res.status === 401 || res.status === 403) {
+        // token expired — re-auth then retry once
+        flash('Drive signin refresh…');
+        state.driveToken = null;
+        await connectDrive();
+        if (!state.driveToken) return flash('Drive signin cancelled');
+        res = await fetch(`https://www.googleapis.com/drive/v3/files/${t.driveId}?alt=media`, {
+          headers: { Authorization: `Bearer ${state.driveToken}` }
+        });
+      }
       if (!res.ok) return flash('Drive fetch failed');
       const blob = await res.blob();
       if (t.blobUrl) URL.revokeObjectURL(t.blobUrl);
@@ -858,7 +1343,7 @@ async function loadTrack(idx, autoplay = true) {
   } catch (e) {
     flash('Load failed: ' + e.message);
   }
-}
+};
 
 function fmtTime(s) {
   if (!isFinite(s)) return '00:00';
@@ -903,18 +1388,28 @@ function escapeHtml(s) {
 
 // ---- Local file loading ----
 $('load-local-btn').addEventListener('click', () => $('file-input').click());
-$('file-input').addEventListener('change', (e) => {
+$('file-input').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files || []);
   for (const f of files) {
+    const id = `l_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    const persistentId = id; // same for local-picked files
+    try {
+      await idbPutFile(persistentId, f.name, f);
+    } catch (err) {
+      console.warn('IDB save failed', err);
+      flash('Could not save file for next launch');
+    }
     state.playlist.push({
-      id: `l_${Date.now()}_${Math.random()}`,
+      id,
       name: f.name.replace(/\.[^.]+$/, ''),
       source: 'local',
       url: URL.createObjectURL(f),
+      persistentId,
     });
   }
   if (state.currentIndex < 0 && state.playlist.length > 0) state.currentIndex = 0;
   renderPlaylist();
+  savePlaylistMeta();
   e.target.value = '';
 });
 
@@ -922,58 +1417,73 @@ $('file-input').addEventListener('change', (e) => {
 ['dragenter', 'dragover'].forEach(ev => {
   document.addEventListener(ev, e => { e.preventDefault(); });
 });
-document.addEventListener('drop', e => {
+document.addEventListener('drop', async e => {
   e.preventDefault();
   const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('audio'));
   for (const f of files) {
+    const id = `l_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    try { await idbPutFile(id, f.name, f); } catch {}
     state.playlist.push({
-      id: `l_${Date.now()}_${Math.random()}`,
+      id,
       name: f.name.replace(/\.[^.]+$/, ''),
       source: 'local',
       url: URL.createObjectURL(f),
+      persistentId: id,
     });
   }
   if (state.currentIndex < 0 && state.playlist.length > 0) state.currentIndex = 0;
   renderPlaylist();
+  savePlaylistMeta();
 });
 
-$('clear-pl-btn').addEventListener('click', () => {
+$('clear-pl-btn').addEventListener('click', async () => {
   state.playlist.forEach(t => { if (t.url?.startsWith('blob:')) URL.revokeObjectURL(t.url); });
   state.playlist = [];
   state.currentIndex = -1;
   audio.pause();
   audio.src = '';
   renderPlaylist();
+  try { await idbClearFiles(); } catch {}
+  localStorage.removeItem('retrobeat-playlist');
 });
 
 // ============================================
 // GOOGLE DRIVE
 // ============================================
-$('load-drive-btn').addEventListener('click', connectDrive);
+$('load-drive-btn').addEventListener('click', () => connectDrive(true));
 
-async function connectDrive() {
-  const cid = state.driveClientId || $('gdrive-cid').value.trim();
-  if (!cid) {
-    flash('Set Drive Client ID in menu');
-    openDrawer();
-    return;
-  }
-  state.driveClientId = cid;
-  saveSettings();
+// awaitable: resolves once token received (or user closes popup)
+// relist=true means also scan and add Drive audio files
+function connectDrive(relist = true) {
+  return new Promise((resolve) => {
+    const cid = state.driveClientId || $('gdrive-cid').value.trim();
+    if (!cid) {
+      flash('Set Drive Client ID in menu');
+      openDrawer();
+      return resolve();
+    }
+    state.driveClientId = cid;
+    saveSettings();
 
-  if (!window.google?.accounts?.oauth2) {
-    return flash('Google SDK still loading…');
-  }
-  const tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: cid,
-    scope: 'https://www.googleapis.com/auth/drive.readonly',
-    callback: async (resp) => {
-      if (resp.error) return flash('Drive auth denied');
-      state.driveToken = resp.access_token;
-      await listDriveAudio();
-    },
+    if (!window.google?.accounts?.oauth2) {
+      flash('Google SDK still loading…');
+      return resolve();
+    }
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: cid,
+      scope: 'https://www.googleapis.com/auth/drive.readonly',
+      callback: async (resp) => {
+        if (resp.error) {
+          flash('Drive auth denied');
+          return resolve();
+        }
+        state.driveToken = resp.access_token;
+        if (relist) await listDriveAudio();
+        resolve();
+      },
+    });
+    tokenClient.requestAccessToken({ prompt: '' });
   });
-  tokenClient.requestAccessToken({ prompt: '' });
 }
 
 async function listDriveAudio() {
@@ -1004,6 +1514,7 @@ async function listDriveAudio() {
   }
   if (state.currentIndex < 0 && state.playlist.length > 0) state.currentIndex = 0;
   renderPlaylist();
+  savePlaylistMeta();
   flash(`Added ${added} Drive track${added === 1 ? '' : 's'}`);
 }
 
@@ -1078,32 +1589,81 @@ function buildEQBands() {
     div.className = 'eq-band';
     const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
     div.innerHTML = `
-      <span class="eq-band-val" id="eq-val-${i}">${state.eqGains[i].toFixed(0)}</span>
-      <input type="range" class="eq-band-slider" id="eq-slider-${i}"
-             min="-12" max="12" step="0.5" value="${state.eqGains[i]}" orient="vertical" />
+      <span class="eq-band-val" id="eq-val-${i}">${formatDb(state.eqGains[i])}</span>
+      <div class="eq-slot" id="eq-slot-${i}">
+        <div class="eq-slot-track"></div>
+        <div class="eq-slot-zero"></div>
+        <div class="eq-thumb" id="eq-thumb-${i}"></div>
+      </div>
       <span class="eq-band-hz">${label}</span>
     `;
     container.appendChild(div);
-    const slider = div.querySelector('input');
-    const valEl  = div.querySelector('.eq-band-val');
-    slider.addEventListener('input', () => {
-      const v = parseFloat(slider.value);
-      state.eqGains[i] = v;
-      valEl.textContent = v.toFixed(0);
-      state.eqPreset = 'custom';
-      $('eq-preset').value = 'flat'; // no custom in select — just deselect
+
+    const slot = div.querySelector('.eq-slot');
+    const thumb = div.querySelector('.eq-thumb');
+
+    // Position thumb based on current value
+    positionThumb(thumb, state.eqGains[i]);
+
+    let dragging = false;
+    const setFromEvent = (e) => {
+      const touch = e.touches?.[0] || e.changedTouches?.[0] || e;
+      const rect = slot.getBoundingClientRect();
+      // y=0 at top -> +12dB; y=rect.height at bottom -> -12dB
+      let frac = (touch.clientY - rect.top) / rect.height;
+      frac = Math.max(0, Math.min(1, frac));
+      const db = (0.5 - frac) * 24;  // -12..+12
+      const snapped = Math.round(db * 2) / 2;  // 0.5dB steps
+      state.eqGains[i] = snapped;
+      positionThumb(thumb, snapped);
+      $(`eq-val-${i}`).textContent = formatDb(snapped);
+      // switch preset dropdown to "custom" hint by reverting to flat selection
+      if (state.eqPreset !== 'custom') {
+        state.eqPreset = 'custom';
+        $('eq-preset').value = 'flat';
+      }
       applyEQState();
+    };
+
+    slot.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      slot.setPointerCapture?.(e.pointerId);
+      setFromEvent(e);
+      e.preventDefault();
+    });
+    slot.addEventListener('pointermove', (e) => {
+      if (dragging) { setFromEvent(e); e.preventDefault(); }
+    });
+    slot.addEventListener('pointerup', (e) => {
+      dragging = false;
+      slot.releasePointerCapture?.(e.pointerId);
       saveSettings();
     });
+    slot.addEventListener('pointercancel', () => { dragging = false; });
+    // Touch fallback for older iOS
+    slot.addEventListener('touchstart', (e) => { dragging = true; setFromEvent(e); e.preventDefault(); }, { passive: false });
+    slot.addEventListener('touchmove',  (e) => { if (dragging) { setFromEvent(e); e.preventDefault(); } }, { passive: false });
+    slot.addEventListener('touchend',   () => { dragging = false; saveSettings(); });
   });
+}
+
+function positionThumb(thumb, db) {
+  // db in -12..+12 -> top from 0% (full up) to 100% (full down)
+  const frac = 0.5 - db / 24;
+  thumb.style.top = `${frac * 100}%`;
+}
+
+function formatDb(v) {
+  if (v === 0) return '0';
+  return (v > 0 ? '+' : '') + (Math.round(v * 10) / 10).toFixed(v % 1 === 0 ? 0 : 1);
 }
 
 function refreshEQUI() {
   for (let i = 0; i < 8; i++) {
-    const sl = $(`eq-slider-${i}`);
+    const thumb = $(`eq-thumb-${i}`);
     const vl = $(`eq-val-${i}`);
-    if (sl) sl.value = state.eqGains[i];
-    if (vl) vl.textContent = state.eqGains[i].toFixed(0);
+    if (thumb) positionThumb(thumb, state.eqGains[i]);
+    if (vl) vl.textContent = formatDb(state.eqGains[i]);
   }
   $('eq-preamp').value = state.eqPreamp;
   $('eq-preamp-val').textContent = `${state.eqPreamp > 0 ? '+' : ''}${state.eqPreamp.toFixed(1)}dB`;
@@ -1158,7 +1718,7 @@ $('viz-fs-btn').addEventListener('click', (e) => {
   toggleFullscreen();
 });
 
-function toggleFullscreen() {
+let toggleFullscreen = function() {
   const panel = $('viz-panel');
   state.fullscreen = !state.fullscreen;
   panel.classList.toggle('fullscreen', state.fullscreen);
@@ -1173,7 +1733,7 @@ function toggleFullscreen() {
   // Force canvas resize after layout settles
   setTimeout(resizeCanvas, 50);
   setTimeout(resizeCanvas, 300);
-}
+};
 
 // Sync state if user exits FS via OS
 document.addEventListener('fullscreenchange', () => {
@@ -1194,12 +1754,111 @@ document.addEventListener('webkitfullscreenchange', () => {
 // Double-tap viz to toggle fullscreen as well
 let lastTapTime = 0;
 $('viz-panel').addEventListener('click', (e) => {
-  // ignore fullscreen button taps (already handled)
-  if (e.target.closest('#viz-fs-btn')) return;
+  // ignore inner control taps
+  if (e.target.closest('#viz-fs-btn') || e.target.closest('.fs-transport') ||
+      e.target.closest('.fs-seek') || e.target.closest('.fs-track-info')) return;
   const now = Date.now();
-  if (now - lastTapTime < 400) toggleFullscreen();
+  if (now - lastTapTime < 400) {
+    toggleFullscreen();
+  } else if (state.fullscreen) {
+    // single tap in fullscreen toggles controls visibility
+    $('viz-panel').classList.toggle('controls-hidden');
+    resetControlsHideTimer();
+  }
   lastTapTime = now;
 });
+
+// ---- Fullscreen transport buttons ----
+$('fs-play').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (audio.paused) {
+    if (state.playlist.length === 0) return flash('Playlist empty');
+    if (state.currentIndex < 0) state.currentIndex = 0;
+    initAudioGraph();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    if (!audio.src) loadTrack(state.currentIndex);
+    try { await audio.play(); } catch {}
+  } else {
+    audio.pause();
+  }
+});
+$('fs-prev').addEventListener('click',    (e) => { e.stopPropagation(); prevTrack(); });
+$('fs-next').addEventListener('click',    (e) => { e.stopPropagation(); nextTrack(true); });
+$('fs-shuffle').addEventListener('click', (e) => {
+  e.stopPropagation();
+  state.shuffle = !state.shuffle;
+  $('fs-shuffle').classList.toggle('active', state.shuffle);
+  $('shuffle-btn').classList.toggle('active', state.shuffle);
+});
+$('fs-repeat').addEventListener('click',  (e) => {
+  e.stopPropagation();
+  const modes = ['off', 'all', 'one'];
+  state.repeat = modes[(modes.indexOf(state.repeat) + 1) % 3];
+  const active = state.repeat !== 'off';
+  $('fs-repeat').classList.toggle('active', active);
+  $('repeat-btn').classList.toggle('active', active);
+  $('fs-repeat').textContent = state.repeat === 'one' ? '↻1' : '↻';
+  $('repeat-btn').textContent = state.repeat === 'one' ? '↻1' : '↻';
+});
+
+// Reflect play/pause icon on fs button
+audio.addEventListener('play', () => { $('fs-play').textContent = '⏸'; });
+audio.addEventListener('pause', () => { $('fs-play').textContent = '▶'; });
+
+// Update fullscreen time + title
+audio.addEventListener('timeupdate', () => {
+  if (!isFinite(audio.duration)) return;
+  $('fs-time').textContent = fmtTime(audio.currentTime);
+  $('fs-dur').textContent  = fmtTime(audio.duration);
+  const fsSeek = $('fs-seek');
+  if (fsSeek && document.activeElement !== fsSeek) {
+    fsSeek.value = (audio.currentTime / audio.duration) * 100 || 0;
+  }
+});
+function updateFsTitle() {
+  const t = state.playlist[state.currentIndex];
+  $('fs-title').textContent = t ? t.name : '—';
+}
+// hook into loadTrack
+const _origLoadTrack = loadTrack;
+loadTrack = async function(...args) {
+  const r = await _origLoadTrack(...args);
+  updateFsTitle();
+  return r;
+};
+
+$('fs-seek').addEventListener('input', (e) => {
+  if (isFinite(audio.duration)) audio.currentTime = (e.target.value / 100) * audio.duration;
+});
+
+// auto-hide fullscreen controls after 3s
+let controlsHideTimer = null;
+function resetControlsHideTimer() {
+  clearTimeout(controlsHideTimer);
+  $('viz-panel').classList.remove('controls-hidden');
+  if (state.fullscreen) {
+    controlsHideTimer = setTimeout(() => {
+      $('viz-panel').classList.add('controls-hidden');
+    }, 3000);
+  }
+}
+// reset timer on any interaction with fs controls
+['fs-play', 'fs-prev', 'fs-next', 'fs-shuffle', 'fs-repeat', 'fs-seek'].forEach(id => {
+  $(id).addEventListener('pointerdown', resetControlsHideTimer);
+});
+
+// When entering fullscreen, start the hide timer
+const _origToggleFs = toggleFullscreen;
+toggleFullscreen = function() {
+  _origToggleFs();
+  if (state.fullscreen) {
+    updateFsTitle();
+    resetControlsHideTimer();
+  } else {
+    clearTimeout(controlsHideTimer);
+    $('viz-panel').classList.remove('controls-hidden');
+  }
+};
 
 // ============================================
 // INIT
@@ -1210,6 +1869,15 @@ setTheme(state.theme || 'classic');
 setViz(state.viz || 'bars');
 buildEQBands();
 $('eq-preset').value = state.eqPreset in EQ_PRESETS ? state.eqPreset : 'flat';
+
+// Restore saved playlist (local files from IDB + Drive refs) asynchronously
+restorePlaylist().then(() => {
+  renderPlaylist();
+});
+
+// Persist current track index whenever playback starts
+function persistIndex() { savePlaylistMeta(); }
+audio.addEventListener('play', persistIndex);
 
 // Media session (lock screen controls on phones)
 if ('mediaSession' in navigator) {

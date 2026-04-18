@@ -765,9 +765,9 @@ input[type="range"]::-moz-range-thumb {
 .eq-bands {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 14px;
-  padding: 10px 4px;
+  padding: 12px 6px;
   background: var(--track-bg);
   border: var(--bevel-in);
 }
@@ -776,53 +776,66 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.eq-band-slider {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
-  writing-mode: vertical-lr;
-  direction: rtl;
-  width: 20px;
-  height: 100px;
-  background: transparent;
+/* Custom touch-friendly vertical slider */
+.eq-slot {
+  position: relative;
+  width: 100%;
+  max-width: 30px;
+  height: 120px;
+  background: var(--bg);
+  border: var(--bevel-in);
   cursor: pointer;
+  touch-action: none;
 }
-.eq-band-slider::-webkit-slider-runnable-track {
-  width: 3px;
-  background: var(--bg);
-  border: var(--bevel-in);
+.eq-slot-track {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg,
+    var(--accent) 0%, var(--accent) 50%,
+    rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.3) 100%);
+  pointer-events: none;
 }
-.eq-band-slider::-moz-range-track {
-  width: 3px;
-  background: var(--bg);
-  border: var(--bevel-in);
-}
-.eq-band-slider::-webkit-slider-thumb {
-  width: 16px;
-  height: 10px;
+.eq-slot-zero {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
   background: var(--accent);
-  border: 1px solid var(--btn-fg);
-  cursor: grab;
+  opacity: 0.3;
+  pointer-events: none;
 }
-.eq-band-slider::-moz-range-thumb {
-  width: 16px;
-  height: 10px;
-  background: var(--accent);
+.eq-thumb {
+  position: absolute;
+  left: 50%;
+  width: 80%;
+  height: 14px;
+  background: linear-gradient(180deg, var(--accent), var(--btn-fg));
   border: 1px solid var(--btn-fg);
-  cursor: grab;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 .eq-band-val {
-  font-size: 8px;
   color: var(--accent);
-  min-height: 10px;
+  min-height: 14px;
   font-family: var(--font-lcd);
-  font-size: 11px;
+  font-size: 13px;
+  letter-spacing: 0;
 }
 .eq-band-hz {
+  font-family: var(--font-display);
   font-size: 8px;
   letter-spacing: 0;
   color: var(--fg);
-  opacity: 0.7;
+  opacity: 0.85;
   text-align: center;
 }
 .eq-preamp-row {
@@ -951,4 +964,116 @@ input[type="range"]::-moz-range-thumb {
   --bevel-b: 1px solid #5a7099;
   --font-display: 'Orbitron', sans-serif;
   --font-lcd: 'VT323', monospace;
+}
+
+/* ============================================
+   FULLSCREEN transport overlay
+   ============================================ */
+.fs-transport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 20px;
+  display: none;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  z-index: 10;
+  pointer-events: auto;
+}
+.viz-panel.fullscreen .fs-transport {
+  display: flex;
+  animation: fadeInUp 0.3s ease-out;
+}
+.fs-transport button {
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.fs-transport button.fs-play {
+  width: 68px;
+  height: 68px;
+  font-size: 28px;
+  background: var(--accent);
+  color: #000;
+}
+.fs-transport button.active {
+  background: var(--accent);
+  color: #000;
+}
+.fs-transport button:active { transform: scale(0.92); }
+
+.fs-track-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 20px;
+  text-align: center;
+  padding: 0 20px;
+  pointer-events: none;
+  z-index: 10;
+  display: none;
+}
+.viz-panel.fullscreen .fs-track-info {
+  display: block;
+  animation: fadeInDown 0.3s ease-out;
+}
+.fs-track-info .fs-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent-glow);
+  letter-spacing: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fs-track-info .fs-time {
+  font-family: var(--font-lcd);
+  font-size: 20px;
+  color: var(--lcd-fg);
+  margin-top: 4px;
+  text-shadow: 0 0 4px var(--lcd-glow);
+}
+.fs-seek {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 100px;
+  display: none;
+  z-index: 10;
+}
+.viz-panel.fullscreen .fs-seek { display: block; }
+.fs-seek input[type="range"] {
+  width: 100%;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* auto-hide after inactivity */
+.viz-panel.fullscreen.controls-hidden .fs-transport,
+.viz-panel.fullscreen.controls-hidden .fs-track-info,
+.viz-panel.fullscreen.controls-hidden .fs-seek,
+.viz-panel.fullscreen.controls-hidden .viz-top-right {
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
 }

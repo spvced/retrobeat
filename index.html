@@ -51,6 +51,21 @@
         <div class="viz-mode-label" id="viz-mode-label">SPECTRUM</div>
       </div>
     </div>
+    <!-- Fullscreen-only track info + transport overlay -->
+    <div class="fs-track-info">
+      <div class="fs-title" id="fs-title">—</div>
+      <div class="fs-time"><span id="fs-time">00:00</span> / <span id="fs-dur">00:00</span></div>
+    </div>
+    <div class="fs-seek">
+      <input type="range" id="fs-seek" min="0" max="100" value="0" step="0.1" />
+    </div>
+    <div class="fs-transport">
+      <button id="fs-shuffle" aria-label="Shuffle">⇄</button>
+      <button id="fs-prev" aria-label="Previous">⏮</button>
+      <button class="fs-play" id="fs-play" aria-label="Play/Pause">▶</button>
+      <button id="fs-next" aria-label="Next">⏭</button>
+      <button id="fs-repeat" aria-label="Repeat">↻</button>
+    </div>
   </section>
 
   <!-- Transport controls -->
@@ -92,6 +107,12 @@
     <button class="viz-tab" data-viz="vortex">VORTEX</button>
     <button class="viz-tab" data-viz="lasers">LASERS</button>
     <button class="viz-tab" data-viz="pixels">PIXELS</button>
+    <button class="viz-tab" data-viz="pacman">PACMAN</button>
+    <button class="viz-tab" data-viz="tetris">TETRIS</button>
+    <button class="viz-tab" data-viz="pong">PONG</button>
+    <button class="viz-tab" data-viz="dvd">DVD</button>
+    <button class="viz-tab" data-viz="rainbow">RAINBOW</button>
+    <button class="viz-tab" data-viz="banana">BANANA</button>
   </section>
 
   <!-- Playlist -->
