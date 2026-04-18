@@ -1236,8 +1236,8 @@ $('play-btn').addEventListener('click', async () => {
 });
 $('pause-btn').addEventListener('click', () => audio.pause());
 $('stop-btn').addEventListener('click', () => { audio.pause(); audio.currentTime = 0; });
-$('prev-btn').addEventListener('click', prevTrack);
-$('next-btn').addEventListener('click', nextTrack);
+$('prev-btn').addEventListener('click', () => prevTrack());
+$('next-btn').addEventListener('click', () => nextTrack());
 $('shuffle-btn').addEventListener('click', () => {
   state.shuffle = !state.shuffle;
   $('shuffle-btn').classList.toggle('active', state.shuffle);
